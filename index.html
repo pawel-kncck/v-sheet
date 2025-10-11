@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Spreadsheet</title>
+    <link rel="stylesheet" href="css/spreadsheet.css" />
+  </head>
+  <body>
+    <div id="spreadsheet-container">
+      <div id="header-row"></div>
+      <div id="grid-container">
+        <div id="row-headers"></div>
+        <div id="cell-grid"></div>
+      </div>
+      <input id="cell-editor" type="text" style="display: none" />
+    </div>
+
+    <!-- Order matters! Load dependencies first -->
+    <script src="js/cell.js"></script>
+    <script src="js/formula-engine.js"></script>
+    <script src="js/spreadsheet.js"></script>
+    <script>
+      // Initialize when DOM is ready
+      document.addEventListener('DOMContentLoaded', () => {
+        window.spreadsheet = new Spreadsheet();
+      });
+    </script>
+  </body>
+</html>
