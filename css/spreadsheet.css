@@ -22,6 +22,8 @@ body {
   grid-template-rows: 25px 1fr; /* 25px for column headers */
   height: calc(100vh - 40px);
   overflow: hidden;
+  /* Prevents text selection on headers during drag */
+  user-select: none;
 }
 
 /* The top-left corner cell needs to be sticky */
@@ -29,7 +31,7 @@ body {
   position: sticky;
   top: 0;
   left: 0;
-  z-index: 3; /* Highest z-index to stay on top of everything */
+  z-index: 3;
   border-right: 1px solid #d4d4d4;
   border-bottom: 1px solid #d4d4d4;
 }
@@ -60,24 +62,22 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Column Headers container (A, B, C...) */
+/* Column Headers container */
 #column-headers {
   grid-area: columns;
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 100px; /* Default column width */
+  grid-auto-columns: 100px;
   overflow: hidden;
-  top: 0;
   z-index: 2;
 }
 
-/* Row Headers container (1, 2, 3...) */
+/* Row Headers container */
 #row-headers {
   grid-area: rows;
   display: grid;
-  grid-auto-rows: 25px; /* Default row height */
+  grid-auto-rows: 25px;
   overflow: hidden;
-  left: 0;
   z-index: 1;
 }
 
@@ -85,8 +85,30 @@ body {
 #cell-grid {
   grid-area: cells;
   display: grid;
-  grid-template-columns: repeat(26, 100px); /* A-Z */
-  grid-template-rows: repeat(100, 25px); /* 1-100 */
-  overflow: auto; /* IMPORTANT: This enables scrolling for the grid */
+  grid-template-columns: repeat(26, 100px);
+  grid-template-rows: repeat(100, 25px);
+  overflow: auto;
   z-index: 0;
+}
+
+/* --- NEW: Selection Styles --- */
+
+/* Style for the currently active cell (thick blue border) */
+.cell.selected {
+  border: 2px solid #1a73e8;
+  /* Use z-index to ensure the border is not overlapped by adjacent cells */
+  z-index: 4;
+  /* The padding needs to be reduced to account for the thicker border */
+  padding: 2.5px;
+}
+
+/* Style for all cells within the selected range (light blue background) */
+.cell.range-selected {
+  background-color: #e8f0fe;
+}
+
+/* Style for the highlighted row and column headers */
+.header-highlight {
+  background-color: #d2e3fc; /* A slightly darker blue for contrast */
+  font-weight: bold;
 }
