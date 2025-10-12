@@ -8,7 +8,7 @@ body {
   font-size: 13px;
   background-color: #f8f9fa;
   margin: 0;
-  padding: 20px;
+  padding: 0px;
   color: #202124;
 }
 
@@ -24,49 +24,60 @@ body {
   overflow: hidden;
 }
 
-/* Header and Cell base styles */
-.header-cell,
-.cell {
+/* The top-left corner cell needs to be sticky */
+#corner-cell {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 3; /* Highest z-index to stay on top of everything */
+  border-right: 1px solid #d4d4d4;
+  border-bottom: 1px solid #d4d4d4;
+}
+
+/* Base style for all header cells (A, B, 1, 2, etc.) */
+.header-cell {
+  font-family: Roboto, RobotoDraft, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  background-color: #eee;
+  color: black;
+  font-weight: normal;
   padding: 4px;
-  border: 1px solid #e0e0e0;
+  border: 0.5px solid #999999;
   text-align: center;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.header-cell {
-  background-color: #6c757d;
-  color: #fff;
-  font-weight: bold;
-  position: sticky;
-  top: 0;
-  left: 0;
-  z-index: 2; /* Ensures headers are above cells */
+/* Base style for data cells */
+.cell {
+  padding: 4px;
+  border: 0.5px solid #dddddd;
+  background-color: #ffffff;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* Column Headers (A, B, C...) */
+/* Column Headers container (A, B, C...) */
 #column-headers {
   grid-area: columns;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 100px; /* Default column width */
-  overflow: hidden; /* Handled by cell-grid scrolling */
-  position: sticky;
+  overflow: hidden;
   top: 0;
-  background: #f8f9fa; /* Prevents seeing cells scroll underneath */
-  z-index: 1;
+  z-index: 2;
 }
 
-/* Row Headers (1, 2, 3...) */
+/* Row Headers container (1, 2, 3...) */
 #row-headers {
   grid-area: rows;
   display: grid;
   grid-auto-rows: 25px; /* Default row height */
-  overflow: hidden; /* Handled by cell-grid scrolling */
-  position: sticky;
+  overflow: hidden;
   left: 0;
-  background: #f8f9fa; /* Prevents seeing cells scroll underneath */
   z-index: 1;
 }
 
@@ -77,9 +88,5 @@ body {
   grid-template-columns: repeat(26, 100px); /* A-Z */
   grid-template-rows: repeat(100, 25px); /* 1-100 */
   overflow: auto; /* IMPORTANT: This enables scrolling for the grid */
-}
-
-.cell {
-  background-color: #fff;
-  text-align: left;
+  z-index: 0;
 }

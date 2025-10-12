@@ -8,14 +8,13 @@
   </head>
   <body>
     <div id="spreadsheet-container">
-      <!-- This empty div is for the top-left corner -->
-      <div class="header-cell"></div>
+      <div id="corner-cell" class="header-cell"></div>
       <div id="column-headers"></div>
       <div id="row-headers"></div>
       <div id="cell-grid"></div>
     </div>
 
-    <script src="js/spreadsheet.js" defer></script>
+    <script src="js/spreadsheet.js"></script>
     <script defer>
       // The 'defer' attribute ensures this script runs after the DOM is parsed
       // and after the 'spreadsheet.js' script has executed.
