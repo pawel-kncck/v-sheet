@@ -1,13 +1,85 @@
-/* All the CSS from before goes here */
+/* Basic reset and body styles */
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 body {
   font-family: Arial, sans-serif;
   font-size: 13px;
-  background-color: #f5f5f5;
+  background-color: #f8f9fa;
+  margin: 0;
   padding: 20px;
+  color: #202124;
+}
+
+/* Main container using CSS Grid */
+#spreadsheet-container {
+  display: grid;
+  grid-template-areas:
+    'corner columns'
+    'rows   cells';
+  grid-template-columns: 50px 1fr; /* 50px for row headers */
+  grid-template-rows: 25px 1fr; /* 25px for column headers */
+  height: calc(100vh - 40px);
+  overflow: hidden;
+}
+
+/* Header and Cell base styles */
+.header-cell,
+.cell {
+  padding: 4px;
+  border: 1px solid #e0e0e0;
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.header-cell {
+  background-color: #6c757d;
+  color: #fff;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 2; /* Ensures headers are above cells */
+}
+
+/* Column Headers (A, B, C...) */
+#column-headers {
+  grid-area: columns;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 100px; /* Default column width */
+  overflow: hidden; /* Handled by cell-grid scrolling */
+  position: sticky;
+  top: 0;
+  background: #f8f9fa; /* Prevents seeing cells scroll underneath */
+  z-index: 1;
+}
+
+/* Row Headers (1, 2, 3...) */
+#row-headers {
+  grid-area: rows;
+  display: grid;
+  grid-auto-rows: 25px; /* Default row height */
+  overflow: hidden; /* Handled by cell-grid scrolling */
+  position: sticky;
+  left: 0;
+  background: #f8f9fa; /* Prevents seeing cells scroll underneath */
+  z-index: 1;
+}
+
+/* The main grid of cells */
+#cell-grid {
+  grid-area: cells;
+  display: grid;
+  grid-template-columns: repeat(26, 100px); /* A-Z */
+  grid-template-rows: repeat(100, 25px); /* 1-100 */
+  overflow: auto; /* IMPORTANT: This enables scrolling for the grid */
+}
+
+.cell {
+  background-color: #fff;
+  text-align: left;
 }
