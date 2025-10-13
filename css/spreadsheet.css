@@ -112,3 +112,21 @@ body {
   background-color: #d2e3fc; /* A slightly darker blue for contrast */
   font-weight: bold;
 }
+
+#cell-editor {
+  position: absolute;
+  display: none;
+  z-index: 5; /* Crucial: Must be higher than a selected cell's z-index */
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  padding: 4px;
+  box-sizing: border-box;
+}
+
+/* --- NEW: Helper class to hide cell text during editing --- */
+.cell.editing {
+  color: transparent;
+}
