@@ -19,10 +19,10 @@ class Spreadsheet {
 
     this.ROWS = 100;
     this.COLS = 26;
-    this.DEFAULT_COL_WIDTH = 100;
-    this.DEFAULT_ROW_HEIGHT = 25;
-    this.MIN_COL_WIDTH = 20;
-    this.MIN_ROW_HEIGHT = 20;
+    this.DEFAULT_COL_WIDTH = 94;
+    this.DEFAULT_ROW_HEIGHT = 20;
+    this.MIN_COL_WIDTH = 5;
+    this.MIN_ROW_HEIGHT = 5;
 
     // --- Advanced Selection State ---
     this.selections = []; // Holds all selection ranges

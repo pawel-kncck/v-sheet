@@ -6,7 +6,7 @@
 body {
   font-family: Arial, sans-serif;
   font-size: 13px;
-  background-color: #f8f9fa;
+  background-color: #ffffff;
   margin: 0;
   padding: 0px;
   color: #202124;
@@ -18,8 +18,8 @@ body {
   grid-template-areas:
     'corner columns'
     'rows   cells';
-  grid-template-columns: 50px 1fr; /* 50px for row headers */
-  grid-template-rows: 25px 1fr; /* 25px for column headers */
+  grid-template-columns: 46px 1fr; /* 50px for row headers */
+  grid-template-rows: 24px 1fr; /* 25px for column headers */
   height: calc(100vh - 40px);
   overflow: hidden;
   /* Prevents text selection on headers during drag */
@@ -32,19 +32,23 @@ body {
   top: 0;
   left: 0;
   z-index: 3;
-  border-right: 1px solid #d4d4d4;
-  border-bottom: 1px solid #d4d4d4;
+  /* border-right: 1px solid #d4d4d4; <-- REPLACED by .header-cell */
+  /* border-bottom: 1px solid #d4d4d4; <-- REPLACED by .header-cell */
+
+  /* ADDED: Add the missing top and left borders */
+  border-top: 0.5px solid #dadce0;
+  border-left: 0.5px solid #dadce0;
 }
 
 /* Base style for all header cells (A, B, 1, 2, etc.) */
 .header-cell {
   font-family: Roboto, RobotoDraft, Helvetica, Arial, sans-serif;
-  font-size: 13px;
-  background-color: #eee;
-  color: black;
+  font-size: 10px;
+  background-color: #f8faf8;
+  color: #444746;
   font-weight: normal;
-  padding: 4px;
-  border: 0.5px solid #999999;
+  padding: 0px;
+  /* border: 0.5px solid #999999; <-- REMOVED */
   text-align: center;
   overflow: hidden;
   white-space: nowrap;
@@ -53,18 +57,28 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+
+  /* ADDED: Apply only right and bottom borders */
+  border-width: 0 0.5px 0.5px 0; /* Top, Right, Bottom, Left */
+  border-style: solid;
+  border-color: #c7c7c7;
 }
 
 /* Base style for data cells */
 .cell {
   padding: 4px;
-  border: 0.5px solid #dddddd;
+  /* border: 0.5px solid #dddddd; <-- REMOVED */
   background-color: #ffffff;
   text-align: left;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
   position: relative; /* Needed for z-index to work correctly */
+
+  /* ADDED: Apply only right and bottom borders */
+  border-width: 0 0.5px 0.5px 0; /* Top, Right, Bottom, Left */
+  border-style: solid;
+  border-color: #dddddd;
 }
 
 /* Column Headers container */
@@ -75,6 +89,9 @@ body {
   /* grid-auto-columns: 100px; <-- REMOVED */
   overflow: hidden;
   z-index: 2;
+
+  /* ADDED: Border for the top of the header row */
+  border-top: 0.5px solid #dadce0;
 }
 
 /* Row Headers container */
@@ -84,6 +101,9 @@ body {
   /* grid-auto-rows: 25px; <-- REMOVED */
   overflow: hidden;
   z-index: 1;
+
+  /* ADDED: Border for the left of the header column */
+  border-left: 0.5px solid #dadce0;
 }
 
 /* The main grid of cells */
@@ -94,13 +114,18 @@ body {
   /* grid-template-rows: repeat(100, 25px); <-- REMOVED */
   overflow: auto;
   z-index: 0;
+
+  /* ADDED: Borders for the top and left of the cell grid area */
+  border-right: 0.5px solid #dddddd;
+  border-bottom: 0.5px solid #dddddd;
 }
 
 /* --- NEW: Selection Styles --- */
 
 /* Style for the currently active cell (thick blue border) */
 .cell.selected {
-  border: 2px solid #1a73e8;
+  /* NOTE: This border will override the cell's default border */
+  border: 1px solid #0e65eb;
   /* Use z-index to ensure the border is not overlapped by adjacent cells */
   z-index: 4;
   /* The padding needs to be reduced to account for the thicker border */
@@ -130,17 +155,18 @@ body {
 }
 
 /* --- NEW: Thin border for selection perimeters --- */
+/* These rules still work perfectly with the new border model */
 .range-border-top {
-  border-top: 1px solid #1a73e8;
+  border-top: 0.5px solid #1a73e8;
 }
 .range-border-right {
-  border-right: 1px solid #1a73e8;
+  border-right: 0.5px solid #1a73e8;
 }
 .range-border-bottom {
-  border-bottom: 1px solid #1a73e8;
+  border-bottom: 0.5px solid #1a73e8;
 }
 .range-border-left {
-  border-left: 1px solid #1a73e8;
+  border-left: 0.5px solid #1a73e8;
 }
 
 .header-highlight {
