@@ -49,6 +49,10 @@ body {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  /* Vertical and horizontal centering */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Base style for data cells */
@@ -60,6 +64,7 @@ body {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  position: relative; /* Needed for z-index to work correctly */
 }
 
 /* Column Headers container */
@@ -102,9 +107,40 @@ body {
   padding: 2.5px;
 }
 
-/* Style for all cells within the selected range (light blue background) */
-.cell.range-selected {
-  background-color: #e8f0fe;
+/* --- NEW: Overlapping background styles --- */
+/* These classes are added dynamically based on how many ranges overlap a cell */
+.range-selected-1 {
+  background-color: rgba(26, 115, 232, 0.1);
+}
+.range-selected-2 {
+  background-color: rgba(26, 115, 232, 0.18);
+}
+.range-selected-3 {
+  background-color: rgba(26, 115, 232, 0.26);
+}
+.range-selected-4 {
+  background-color: rgba(26, 115, 232, 0.34);
+}
+/* Add more if you expect more overlaps */
+.range-selected-5,
+.range-selected-6,
+.range-selected-7,
+.range-selected-8 {
+  background-color: rgba(26, 115, 232, 0.4);
+}
+
+/* --- NEW: Thin border for selection perimeters --- */
+.range-border-top {
+  border-top: 1px solid #1a73e8;
+}
+.range-border-right {
+  border-right: 1px solid #1a73e8;
+}
+.range-border-bottom {
+  border-bottom: 1px solid #1a73e8;
+}
+.range-border-left {
+  border-left: 1px solid #1a73e8;
 }
 
 /* Style for the highlighted row and column headers */
@@ -126,7 +162,7 @@ body {
   box-sizing: border-box;
 }
 
-/* --- NEW: Helper class to hide cell text during editing --- */
+/* Helper class to hide cell text during editing */
 .cell.editing {
   color: transparent;
 }
