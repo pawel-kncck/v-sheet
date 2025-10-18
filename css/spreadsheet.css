@@ -165,3 +165,18 @@ body {
 .cell.editing {
   color: transparent;
 }
+/* --- NEW: Drag-to-move styles --- */
+
+/* Class to set the cursor on the grid container */
+.grab-cursor {
+  cursor: grab;
+}
+
+/* The ghost element for dragging */
+#drag-ghost {
+  position: absolute;
+  border: 2px dashed #1a73e8;
+  background-color: rgba(26, 115, 232, 0.05);
+  z-index: 10;
+  pointer-events: none; /* Allows mouse events to pass through to cells underneath */
+}
