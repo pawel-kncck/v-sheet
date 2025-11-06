@@ -1,36 +1,48 @@
-# 📊 v-sheet: AI-Powered Financial Spreadsheet
+# 📊 v-sheet: A Modern Web Spreadsheet
 
-**v-sheet** is a simple, yet powerful online spreadsheet application built specifically for **financial modeling**. It is designed with a core focus on integrating a **native AI agent** to assist with complex financial analysis, data manipulation, and formula generation, while maintaining a lightweight architecture using vanilla JavaScript.
+**v-sheet** is a powerful, lightweight spreadsheet application built with vanilla JavaScript on the front end and a persistent Python Flask backend for file management. It is designed to be a fast, modern, and extensible platform for data manipulation.
 
----
-
-## 🚀 Project Goal
-
-The primary goal of `v-sheet` is to combine the familiar, robust functionality of a traditional spreadsheet with the cutting-edge capabilities of a large language model. This creates an environment where users can quickly build sophisticated financial models and receive instant, context-aware assistance from the built-in AI agent.
+While the project's ultimate goal is to integrate a **native AI agent (Gemini API)** for financial modeling, the current version provides a robust, fully-functional spreadsheet experience with advanced features like persistent storage, cell drag-and-drop, and dynamic resizing.
 
 ---
 
 ## ✨ Features
 
-### Initial Features
+This application goes beyond a simple grid, implementing core features expected from a modern spreadsheet.
 
-- **Grid Interface:** A functional, pure HTML/CSS grid for displaying cells and data.
-- **Cell Editing:** Basic input field for editing cell content and formulas.
-- **Core Logic:** Separate files for core logic: `cell.js`, `formula-engine.js`, and `spreadsheet.js`.
+- **Persistent File Management:**
 
-### Planned Features
+  - A full file-management system powered by a Flask API.
+  - Create, rename, and delete spreadsheets.
+  - File browser with search and sorting by modification date.
+  - Debounced **autosave** ensures changes are saved to the server automatically.
+  - Save status indicator (Saved, Unsaved, Saving).
 
-- **Formula Evaluation:** A robust engine for evaluating cell formulas (e.g., `SUM`, `AVG`, cell references like `A1 + B2`).
-- **Native AI Agent:** A chat/prompt interface powered by the Gemini API for asking questions about the model, summarizing results, or suggesting formulas.
-- **Contextual Financial Functions:** Specialized functions for financial analysis (e.g., `NPV`, `IRR`).
+- **Advanced Spreadsheet Grid:**
+
+  - Dynamic grid with 100 rows and 26 columns.
+  - **Column and Row Resizing:** Click and drag headers to resize selected or individual columns/rows.
+  - **Drag-to-Move:** Drag any selected cell range to a new location.
+  - **Advanced Selection:**
+    - Click to select a cell.
+    - Click-and-drag for range selection.
+    - `Shift + Click` to extend selection.
+    - `Cmd/Ctrl + Click` to add multiple, non-contiguous selections.
+    - Click headers to select entire columns or rows.
+
+- **Integrated UI:**
+
+  - **Formula Bar:** Displays the active cell (e.g., `A1`) and its full contents.
+  - **In-Place Editing:** Double-click any cell to edit it directly.
+  - **Keyboard Navigation:** Use arrow keys, `Enter`, `Tab`, and `Cmd/Ctrl + Arrow` keys for rapid navigation and selection.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend:** **Vanilla JavaScript**, HTML5, CSS3.
-- **API:** **Gemini API** for the AI agent functionality.
-- **Development Utility:** **Gemini CLI** for development and deployment tasks.
+- **Frontend:** **Vanilla JavaScript (ES6+)**, HTML5, CSS3.
+- **Backend:** **Python 3** with **Flask**.
+- **Data Storage:** Spreadsheets are stored as individual JSON files on the server in the `data/` directory.
 
 ---
 
@@ -38,66 +50,94 @@ The primary goal of `v-sheet` is to combine the familiar, robust functionality o
 
 ### Prerequisites
 
-You will need the following installed:
+You will need the following installed on your system:
 
-- Node.js (for Gemini CLI)
-- Gemini CLI (installed globally or locally)
+- Python 3.x
+- `pip` (Python package installer)
 
-<!-- end list -->
+### 1\. Set Up the Environment
 
-```bash
-# Install the Gemini CLI
-npm install -g @google/genai
-```
-
-### 1\. API Key Setup
-
-To enable the AI agent, you must set up your **Gemini API Key**.
-
-1.  Create a file named `.env` in the root directory of the project.
-2.  Add your API key to the file in the following format:
-
-<!-- end list -->
+First, set up and activate a Python virtual environment to manage dependencies.
 
 ```bash
-GEMINI_API_KEY="YOUR_API_KEY_HERE"
+# Navigate to the project's root directory
+cd v-sheet
+
+# Create a virtual environment
+python -m venv venv
+
+# Activate the environment
+# On macOS/Linux:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
 ```
 
-_(A placeholder key was included in the project for reference.)_
+### 2\. Install Dependencies
 
-### 2\. Running the App
-
-Since this is a vanilla JS project, you simply need a local server to serve the files. You can use the Gemini CLI or any other lightweight server utility (like `http-server` or Python's `http.server`).
-
-#### Using the Gemini CLI
-
-While the Gemini CLI is primarily for interaction, you can use a local web server utility for quick setup:
+Install the required Python packages for the backend server.
 
 ```bash
-# Example using Python's built-in server
-# Run from the project root directory
-python -m http.server 8080
+# Install requirements
+pip install -r server/requirements.txt
 ```
 
-#### Accessing the Spreadsheet
+### 3\. Run the Application
+
+The Python server handles both the backend API and serves the static front-end files (HTML, CSS, JS).
+
+```bash
+# Run the Flask server
+python server/app.py
+```
+
+You should see output indicating the server is running, storing data in the `data/files` directory, and listening on `http://localhost:5000`.
+
+### 4\. Access v-sheet
 
 1.  Open your web browser.
-2.  Navigate to `http://localhost:8080`.
+2.  Navigate to **`http://localhost:5000`**.
+
+The application will load, automatically create your first spreadsheet file if one doesn't exist, and be ready to use.
 
 ---
 
 ## 📂 Project Structure
 
-The current structure is focused on separating concerns into HTML, CSS, and modular JavaScript:
-
 ```
 v-sheet/
-├── index.html                # Main page structure
-├── .env                      # Environment variables (GEMINI_API_KEY)
+├── .gitignore                # Git ignore configuration
+├── index.html                # Main application HTML structure
+├── README.md                 # Project documentation (this file)
+│
 ├── css/
-│   └── spreadsheet.css       # Styling for the grid and elements
-└── js/
-    ├── cell.js               # Logic for individual Cell objects
-    ├── formula-engine.js     # Engine for parsing and calculating formulas (WIP)
-    └── spreadsheet.js        # Main application logic and grid management
+│   └── spreadsheet.css       # All styles for the grid and UI
+│
+├── js/
+│   ├── spreadsheet.js        # Core grid logic (selection, resizing, rendering)
+│   ├── file-manager.js       # Client-side API and file state management
+│   └── formula-bar.js        # UI logic for the top bar and file dropdown
+│
+├── server/
+│   ├── app.py                # Flask backend server (API & file serving)
+│   └── requirements.txt      # Python dependencies
+│
+└── data/                     # (Created by server) Default data storage
+    ├── files/                # (Created by server) Stores all .json spreadsheets
+    └── metadata.json         # (Created by server) Tracks the last-opened file
 ```
+
+---
+
+## 🗺️ API Endpoints
+
+The backend server provides the following REST API endpoints:
+
+| Method   | Endpoint               | Description                                                                        |
+| -------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| `GET`    | `/api/files`           | Lists metadata for all available spreadsheets.                                     |
+| `POST`   | `/api/files`           | Creates a new, empty spreadsheet file.                                             |
+| `GET`    | `/api/files/<file_id>` | Loads the full JSON data for a specific spreadsheet.                               |
+| `PUT`    | `/api/files/<file_id>` | Updates (autosaves) a spreadsheet with new data.                                   |
+| `DELETE` | `/api/files/<file_id>` | Deletes a specific spreadsheet file.                                               |
+| `GET`    | `/api/recent`          | Gets the ID of the most recently viewed file, or creates a new file if none exist. |
