@@ -25,24 +25,28 @@ class Spreadsheet {
     this.MIN_ROW_HEIGHT = 5;
 
     // --- Advanced Selection State ---
-    this.selections = []; // Holds all selection ranges
-    this.selectionAnchor = null; // The first cell clicked in a selection range
-    this.activeCell = null; // The cell with the primary focus (blue border)
+    this.selections = [];
+    this.selectionAnchor = null;
+    this.activeCell = null;
     this.isMouseDown = false;
 
     // --- Resizing State ---
     this.columnWidths = [];
     this.rowHeights = [];
     this.isResizing = false;
-    this.resizeInfo = {}; // Stores info about the current resize operation
+    this.resizeInfo = {};
 
-    // --- NEW: Drag-to-move State ---
+    // --- Drag-to-move State ---
     this.isDraggingCells = false;
     this.dragInfo = {};
     this.ghostElement = null;
 
-    // --- NEW: Editing Intent State ---
+    // --- Editing Intent State ---
     this.isEditingIntentionally = false;
+
+    // --- Integration with FileManager and FormulaBar ---
+    this.fileManager = null;
+    this.formulaBar = null;
 
     this._createGrid();
     this._syncScroll();
@@ -54,7 +58,134 @@ class Spreadsheet {
     this._handleCellSelection(firstCell, false, false);
   }
 
-  // --- Grid creation and sync methods ---
+  // --- New Integration Methods ---
+
+  /**
+   * Set the FileManager instance for integration
+   */
+  setFileManager(fileManager) {
+    this.fileManager = fileManager;
+  }
+
+  /**
+   * Set the FormulaBar instance for integration
+   */
+  setFormulaBar(formulaBar) {
+    this.formulaBar = formulaBar;
+    // Update formula bar with initial cell
+    if (this.formulaBar) {
+      this.formulaBar.updateCellReference('A1');
+      this.formulaBar.updateFormulaInput('');
+    }
+  }
+
+  /**
+   * Load spreadsheet data from file
+   */
+  loadFromFile(fileData) {
+    if (!fileData) return;
+
+    // Clear existing data
+    this.clear();
+
+    // Load cells
+    if (fileData.cells) {
+      this.cellData = {};
+      Object.entries(fileData.cells).forEach(([cellId, cellInfo]) => {
+        this.cellData[cellId] = cellInfo.value;
+        const cell = this.cellGridContainer.querySelector(
+          `[data-id='${cellId}']`
+        );
+        if (cell) {
+          cell.textContent = cellInfo.value;
+        }
+      });
+    }
+
+    // Load column widths
+    if (fileData.columnWidths && fileData.columnWidths.length === this.COLS) {
+      this.columnWidths = [...fileData.columnWidths];
+      this._applyGridStyles();
+    }
+
+    // Load row heights
+    if (fileData.rowHeights && fileData.rowHeights.length === this.ROWS) {
+      this.rowHeights = [...fileData.rowHeights];
+      this._applyGridStyles();
+    }
+
+    // Load metadata
+    if (fileData.metadata) {
+      // Restore last active cell
+      if (fileData.metadata.lastActiveCell) {
+        this.selectCell(fileData.metadata.lastActiveCell);
+      }
+
+      // Restore selections if needed
+      if (
+        fileData.metadata.selections &&
+        fileData.metadata.selections.length > 0
+      ) {
+        // Optionally restore previous selections
+      }
+    }
+  }
+
+  /**
+   * Clear all spreadsheet data
+   */
+  clear() {
+    // Clear cell data
+    this.cellData = {};
+
+    // Clear visual cells
+    this.cellGridContainer.querySelectorAll('.cell').forEach((cell) => {
+      cell.textContent = '';
+    });
+
+    // Reset column widths and row heights
+    this._initColumnWidths();
+    this._initRowHeights();
+    this._applyGridStyles();
+
+    // Reset selection to A1
+    const firstCell = this.cellGridContainer.querySelector("[data-id='A1']");
+    if (firstCell) {
+      this._setActiveCell(firstCell);
+      this._handleCellSelection(firstCell, false, false);
+    }
+  }
+
+  /**
+   * Get cell value by ID
+   */
+  getCellValue(cellId) {
+    return this.cellData[cellId] || '';
+  }
+
+  /**
+   * Set cell value by ID
+   */
+  setCellValue(cellId, value) {
+    const cell = this.cellGridContainer.querySelector(`[data-id='${cellId}']`);
+    if (cell) {
+      this._updateCell(cell, value);
+    }
+  }
+
+  /**
+   * Select a cell by ID
+   */
+  selectCell(cellId) {
+    const cell = this.cellGridContainer.querySelector(`[data-id='${cellId}']`);
+    if (cell) {
+      this._setActiveCell(cell);
+      this._handleCellSelection(cell, false, false);
+      this._scrollCellIntoView(cell);
+    }
+  }
+
+  // --- Modified Grid creation methods ---
 
   _createGrid() {
     this._initColumnWidths();
@@ -62,7 +193,7 @@ class Spreadsheet {
     this._createColumnHeaders();
     this._createRowHeaders();
     this._createCells();
-    this._applyGridStyles(); // Apply dynamic styles
+    this._applyGridStyles();
   }
 
   _initColumnWidths() {
@@ -72,7 +203,6 @@ class Spreadsheet {
   }
 
   _initRowHeights() {
-    // Note: rowHeights is 0-indexed (for rows 1-100)
     for (let i = 0; i < this.ROWS; i++) {
       this.rowHeights[i] = this.DEFAULT_ROW_HEIGHT;
     }
@@ -132,7 +262,7 @@ class Spreadsheet {
     });
   }
 
-  // --- Event Handling and Selection Logic ---
+  // --- Modified Event Handling with Integration ---
 
   _initEventListeners() {
     this.cellGridContainer.tabIndex = 0;
@@ -141,12 +271,10 @@ class Spreadsheet {
     this.cellGridContainer.addEventListener('mousedown', (e) => {
       if (this.isEditing) return;
 
-      // --- NEW: Check if starting a drag ---
       if (this.cellGridContainer.style.cursor === 'grab') {
         this._initDrag(e);
-        return; // Don't start a selection
+        return;
       }
-      // --- END NEW ---
 
       if (e.target.classList.contains('cell')) {
         this.isMouseDown = true;
@@ -154,12 +282,10 @@ class Spreadsheet {
       }
     });
 
-    // --- NEW: Mouse move on grid for drag cursor ---
     this.cellGridContainer.addEventListener(
       'mousemove',
       this._handleGridMouseMove.bind(this)
     );
-    // --- END NEW ---
 
     this.cellGridContainer.addEventListener('mouseover', (e) => {
       if (this.isMouseDown && e.target.classList.contains('cell')) {
@@ -211,14 +337,12 @@ class Spreadsheet {
       if (this.isResizing) {
         this._stopResize();
       }
-      // --- NEW: Stop dragging ---
       if (this.isDraggingCells) {
         this._stopDrag();
       }
-      // --- END NEW ---
     });
 
-    // Keyboard listener
+    // Keyboard listener with formula bar integration
     this.cellGridContainer.addEventListener('keydown', (e) => {
       if (this.isEditing) return;
       const key = e.key;
@@ -236,8 +360,24 @@ class Spreadsheet {
         }
       } else if (key === 'Enter') {
         e.preventDefault();
-        this._startEditing(this.activeCell);
+        // Check if formula bar is available and use it for editing
+        if (this.formulaBar && !this.isEditing) {
+          this.formulaBar.focusFormulaInput();
+        } else {
+          this._startEditing(this.activeCell);
+        }
+      } else if (key === 'F2') {
+        e.preventDefault();
+        // F2 key also starts editing
+        if (this.formulaBar && !this.isEditing) {
+          this.formulaBar.focusFormulaInput();
+        } else {
+          this._startEditing(this.activeCell);
+        }
       } else if (key === 'Backspace') {
+        e.preventDefault();
+        this._clearSelectedCells();
+      } else if (key === 'Delete') {
         e.preventDefault();
         this._clearSelectedCells();
       } else if (key.length === 1 && !isCmd && !e.altKey) {
@@ -259,7 +399,12 @@ class Spreadsheet {
 
       if (key === 'Enter') {
         e.preventDefault();
-        this._commitEdit(true); // Commit and move down
+        this._commitEdit(true);
+      } else if (key === 'Tab') {
+        e.preventDefault();
+        this._commitEdit(false);
+        this._handleArrowKey('ArrowRight', false);
+        this.cellGridContainer.focus();
       } else if (key === 'Escape') {
         e.preventDefault();
         this._cancelEdit();
@@ -274,13 +419,34 @@ class Spreadsheet {
         }
       }
     });
+
     this.cellEditor.addEventListener('blur', () => {
       if (this.isEditing) {
         this._commitEdit(false);
       }
     });
+
+    // Save on Ctrl+S
+    document.addEventListener('keydown', async (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (this.fileManager) {
+          await this.fileManager.forceSave();
+        }
+      }
+    });
+
+    // Save before unload
+    window.addEventListener('beforeunload', async (e) => {
+      if (this.fileManager && this.fileManager.hasChanges()) {
+        e.preventDefault();
+        e.returnValue =
+          'You have unsaved changes. Are you sure you want to leave?';
+      }
+    });
   }
 
+  // Modified selection handler with formula bar integration
   _handleCellSelection(cell, isShift, isCmd) {
     const coords = this._getCellCoords(cell);
 
@@ -300,8 +466,23 @@ class Spreadsheet {
       this._setActiveCell(cell);
       this.selectionAnchor = coords;
       this.selections = [{ start: coords, end: coords }];
+
+      // Update formula bar
+      if (this.formulaBar) {
+        const cellId = cell.dataset.id;
+        this.formulaBar.updateCellReference(cellId);
+        this.formulaBar.updateFormulaInput(this.cellData[cellId] || '');
+      }
     }
     this._renderSelections();
+
+    // Update FileManager metadata
+    if (this.fileManager) {
+      this.fileManager.updateMetadata({
+        lastActiveCell: cell.dataset.id,
+        selections: this.selections,
+      });
+    }
   }
 
   _handleHeaderSelection(index, type, isShift, isCmd) {
@@ -372,7 +553,7 @@ class Spreadsheet {
         `[data-id='${cellId}']`
       );
       if (cell) {
-        const count = Math.min(cellSelectionCounts[cellId], 8); // Cap at 8 for styling
+        const count = Math.min(cellSelectionCounts[cellId], 8);
         cell.classList.add(`range-selected-${count}`);
       }
     }
@@ -551,7 +732,7 @@ class Spreadsheet {
           r += dr;
           c += dc;
         }
-        return lastNonEmpty; // Reached edge of sheet
+        return lastNonEmpty;
       } else {
         let r = row + dr;
         let c = col + dc;
@@ -580,7 +761,7 @@ class Spreadsheet {
 
     const newCell = this._getCellElement(targetCoords);
     if (newCell) {
-      this._handleCellSelection(newCell, true, false); // true = isShift
+      this._handleCellSelection(newCell, true, false);
       this._scrollCellIntoView(newCell);
     }
   }
@@ -591,10 +772,10 @@ class Spreadsheet {
     }
   }
 
-  // --- Resizing Methods ---
+  // --- Resizing Methods with FileManager integration ---
 
   _handleHeaderMouseMove(e) {
-    if (this.isResizing) return; // Don't change cursor while resizing
+    if (this.isResizing) return;
 
     const target = e.target.closest('.header-cell');
     if (!target) {
@@ -630,7 +811,7 @@ class Spreadsheet {
       if (type === 'col') {
         originalSizes[index] = this.columnWidths[index];
       } else {
-        originalSizes[index] = this.rowHeights[index - 1]; // Row array is 0-indexed
+        originalSizes[index] = this.rowHeights[index - 1];
       }
     });
 
@@ -642,7 +823,6 @@ class Spreadsheet {
       clickedIndex: clickedIndex,
     };
 
-    // Bind window listeners
     this._onResize = this._onResize.bind(this);
     this._stopResize = this._stopResize.bind(this);
     window.addEventListener('mousemove', this._onResize);
@@ -653,7 +833,6 @@ class Spreadsheet {
     const indices = new Set([clickedIndex]);
     const checkCol = type === 'col';
 
-    // Helper functions to check if a selection is a full row/col
     const isFullCol = (sel) => {
       const minRow = Math.min(sel.start.row, sel.end.row);
       const maxRow = Math.max(sel.start.row, sel.end.row);
@@ -732,7 +911,7 @@ class Spreadsheet {
       if (type === 'col') {
         this.columnWidths[index] = newSize;
       } else {
-        this.rowHeights[index - 1] = newSize; // Row array is 0-indexed
+        this.rowHeights[index - 1] = newSize;
       }
     });
 
@@ -743,18 +922,21 @@ class Spreadsheet {
     this.isResizing = false;
     this.resizeInfo = {};
     window.removeEventListener('mousemove', this._onResize);
+
+    // Save column/row sizes to FileManager
+    if (this.fileManager) {
+      this.fileManager.updateColumnWidths(this.columnWidths);
+      this.fileManager.updateRowHeights(this.rowHeights);
+    }
   }
 
-  // --- NEW: Drag-to-Move Methods ---
+  // --- Drag-to-Move Methods ---
 
   _handleGridMouseMove(e) {
-    // Don't change cursor if resizing, selecting, or already dragging
     if (this.isResizing || this.isMouseDown || this.isDraggingCells) return;
 
     const cell = e.target.closest('.cell');
 
-    // Check if we are over a selected cell border
-    // Note: 'range-selected-1' is a good proxy for "is a cell selected"
     if (
       cell &&
       cell.classList.contains('range-selected-1') &&
@@ -788,32 +970,26 @@ class Spreadsheet {
     this.isDraggingCells = true;
     this.cellGridContainer.style.cursor = 'grabbing';
 
-    // We drag the last selection in the array
     const selection = this.selections[this.selections.length - 1];
 
-    // Find the dimensions of the selection
     const minCol = Math.min(selection.start.col, selection.end.col);
     const maxCol = Math.max(selection.start.col, selection.end.col);
     const minRow = Math.min(selection.start.row, selection.end.row);
     const maxRow = Math.max(selection.start.row, selection.end.row);
 
-    // Calculate total width and height
     let width = 0;
     for (let c = minCol; c <= maxCol; c++) width += this.columnWidths[c];
     let height = 0;
     for (let r = minRow; r <= maxRow; r++) height += this.rowHeights[r - 1];
 
-    // Create ghost element
     this.ghostElement = document.createElement('div');
     this.ghostElement.id = 'drag-ghost';
     this.ghostElement.style.width = `${width}px`;
     this.ghostElement.style.height = `${height}px`;
 
-    // Position the ghost element
     const startCellEl = this._getCellElement({ col: minCol, row: minRow });
     const gridRect = this.cellGridContainer.getBoundingClientRect();
 
-    // Calculate initial position relative to the container
     const initialLeft =
       startCellEl.offsetLeft - this.cellGridContainer.scrollLeft;
     const initialTop = startCellEl.offsetTop - this.cellGridContainer.scrollTop;
@@ -823,21 +999,18 @@ class Spreadsheet {
 
     this.container.appendChild(this.ghostElement);
 
-    // The drag start position is the top-left of the selection
     const dragStartCoords = { col: minCol, row: minRow };
 
     this.dragInfo = {
       selection: selection,
       dragStartCoords: dragStartCoords,
-      // Store the offset from the mouse cursor to the ghost's top-left
       mouseOffset: {
         x: e.clientX - gridRect.left - initialLeft,
         y: e.clientY - gridRect.top - initialTop,
       },
-      lastSnapCoords: null, // --- NEW: For snap-to-grid ---
+      lastSnapCoords: null,
     };
 
-    // Bind window listeners
     this._onDrag = this._onDrag.bind(this);
     this._stopDrag = this._stopDrag.bind(this);
     window.addEventListener('mousemove', this._onDrag);
@@ -847,26 +1020,23 @@ class Spreadsheet {
   _onDrag(e) {
     if (!this.isDraggingCells) return;
 
-    // Find the cell element under the mouse
     const dropTarget = document
       .elementFromPoint(e.clientX, e.clientY)
       .closest('.cell');
 
-    if (!dropTarget) return; // Mouse is not over a cell
+    if (!dropTarget) return;
 
     const dropCoords = this._getCellCoords(dropTarget);
 
-    // Check if we already snapped to this cell to prevent flickering
     if (
       this.dragInfo.lastSnapCoords &&
       this.dragInfo.lastSnapCoords.row === dropCoords.row &&
       this.dragInfo.lastSnapCoords.col === dropCoords.col
     ) {
-      return; // No change
+      return;
     }
     this.dragInfo.lastSnapCoords = dropCoords;
 
-    // Snap the ghost's top-left corner to the drop target's top-left corner
     const newLeft = dropTarget.offsetLeft - this.cellGridContainer.scrollLeft;
     const newTop = dropTarget.offsetTop - this.cellGridContainer.scrollTop;
 
@@ -877,13 +1047,9 @@ class Spreadsheet {
   _stopDrag() {
     if (!this.isDraggingCells) return;
 
-    // Find drop target
     const ghostRect = this.ghostElement.getBoundingClientRect();
     const dropTarget = document
-      .elementFromPoint(
-        ghostRect.left + 2, // 2px offset to be inside the cell
-        ghostRect.top + 2
-      )
+      .elementFromPoint(ghostRect.left + 2, ghostRect.top + 2)
       .closest('.cell');
 
     if (dropTarget) {
@@ -898,7 +1064,6 @@ class Spreadsheet {
       }
     }
 
-    // Cleanup
     this.ghostElement.remove();
     this.ghostElement = null;
     this.isDraggingCells = false;
@@ -916,7 +1081,6 @@ class Spreadsheet {
 
     const dataToMove = [];
 
-    // 1. Collect all data to be moved
     for (let col = minCol; col <= maxCol; col++) {
       for (let row = minRow; row <= maxRow; row++) {
         const cell = this._getCellElement({ col, row });
@@ -927,19 +1091,16 @@ class Spreadsheet {
       }
     }
 
-    // 2. Clear all original cells (to handle overlaps correctly)
     for (let col = minCol; col <= maxCol; col++) {
       for (let row = minRow; row <= maxRow; row++) {
         this._updateCell(this._getCellElement({ col, row }), '');
       }
     }
 
-    // 3. Write data to new location
     dataToMove.forEach((item) => {
       const targetCol = item.col + colOffset;
       const targetRow = item.row + rowOffset;
 
-      // Ensure target is within bounds
       if (
         targetCol >= 0 &&
         targetCol < this.COLS &&
@@ -954,13 +1115,10 @@ class Spreadsheet {
       }
     });
 
-    // 4. Update the selection to the new location
     const newStart = { col: start.col + colOffset, row: start.row + rowOffset };
     const newEnd = { col: end.col + colOffset, row: end.row + rowOffset };
     this.selections = [{ start: newStart, end: newEnd }];
 
-    // The new selection anchor becomes the top-left of the *original* selection's
-    // new position, which matches the dragStartCoords offset.
     const newAnchorCoords = {
       col: this.dragInfo.dragStartCoords.col + colOffset,
       row: this.dragInfo.dragStartCoords.row + rowOffset,
@@ -971,7 +1129,7 @@ class Spreadsheet {
     this._renderSelections();
   }
 
-  // --- Editing and Utility methods ---
+  // --- Modified Editing methods with FileManager integration ---
 
   _startEditing(cell, initialValue = '') {
     this.isEditingIntentionally = initialValue === '';
@@ -1002,7 +1160,7 @@ class Spreadsheet {
     const newValue = this.cellEditor.value;
     const cellId = this.editingCell.dataset.id;
 
-    this._updateCell(this.editingCell, newValue); // Use helper
+    this._updateCell(this.editingCell, newValue);
 
     const previouslyEditingCell = this.editingCell;
     this._cancelEdit();
@@ -1035,23 +1193,35 @@ class Spreadsheet {
       for (let col = minCol; col <= maxCol; col++) {
         for (let row = minRow; row <= maxRow; row++) {
           const cell = this._getCellElement({ col, row });
-          this._updateCell(cell, ''); // Use helper
+          this._updateCell(cell, '');
         }
       }
     });
   }
 
-  // --- Helper Methods ---
+  // --- Modified Helper Methods with FileManager integration ---
 
   _updateCell(cell, value) {
     if (!cell) return;
 
+    const cellId = cell.dataset.id;
+
     if (value) {
-      this.cellData[cell.dataset.id] = value;
+      this.cellData[cellId] = value;
       cell.textContent = value;
     } else {
-      delete this.cellData[cell.dataset.id];
+      delete this.cellData[cellId];
       cell.textContent = '';
+    }
+
+    // Update FileManager
+    if (this.fileManager) {
+      this.fileManager.updateCellData(cellId, value);
+    }
+
+    // Update Formula Bar if this is the active cell
+    if (this.formulaBar && this.activeCell === cell) {
+      this.formulaBar.updateFormulaInput(value);
     }
   }
 

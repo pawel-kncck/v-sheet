@@ -104,22 +104,38 @@
     <script src="js/file-manager.js"></script>
     <script src="js/formula-bar.js"></script>
     <script src="js/spreadsheet.js"></script>
-    <script defer>
-      // The 'defer' attribute ensures this script runs after the DOM is parsed
-      // and after all scripts have executed.
+    <script>
       let fileManager;
       let formulaBar;
       let spreadsheet;
 
       // Initialize everything when page loads
       window.addEventListener('DOMContentLoaded', async () => {
-        // Create instances
-        fileManager = new FileManager();
-        spreadsheet = new Spreadsheet('spreadsheet-container');
-        formulaBar = new FormulaBar(fileManager, spreadsheet);
+        try {
+          // Create instances
+          spreadsheet = new Spreadsheet('spreadsheet-container');
+          fileManager = new FileManager();
+          formulaBar = new FormulaBar(fileManager, spreadsheet);
 
-        // Initialize file manager (will load recent file)
-        await fileManager.initialize();
+          // Connect components
+          spreadsheet.setFileManager(fileManager);
+          spreadsheet.setFormulaBar(formulaBar);
+
+          // Initialize file manager (will load recent file)
+          const initialized = await fileManager.initialize();
+
+          if (initialized) {
+            // Load the spreadsheet data from the current file
+            const fileData = fileManager.getCurrentFileData();
+            if (fileData) {
+              spreadsheet.loadFromFile(fileData);
+            }
+          }
+
+          console.log('Spreadsheet application initialized successfully');
+        } catch (error) {
+          console.error('Failed to initialize spreadsheet:', error);
+        }
       });
     </script>
   </body>
