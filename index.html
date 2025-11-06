@@ -102,15 +102,23 @@
     </div>
 
     <script src="js/file-manager.js"></script>
+    <script src="js/formula-bar.js"></script>
     <script src="js/spreadsheet.js"></script>
     <script defer>
       // The 'defer' attribute ensures this script runs after the DOM is parsed
-      // and after the 'spreadsheet.js' script has executed.
-      const fileManager = new FileManager();
-      const spreadsheet = new Spreadsheet('spreadsheet-container');
+      // and after all scripts have executed.
+      let fileManager;
+      let formulaBar;
+      let spreadsheet;
 
-      // Initialize file manager when page loads
+      // Initialize everything when page loads
       window.addEventListener('DOMContentLoaded', async () => {
+        // Create instances
+        fileManager = new FileManager();
+        spreadsheet = new Spreadsheet('spreadsheet-container');
+        formulaBar = new FormulaBar(fileManager, spreadsheet);
+
+        // Initialize file manager (will load recent file)
         await fileManager.initialize();
       });
     </script>
