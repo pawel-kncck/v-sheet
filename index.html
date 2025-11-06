@@ -101,11 +101,18 @@
       <div id="cell-grid"></div>
     </div>
 
+    <script src="js/file-manager.js"></script>
     <script src="js/spreadsheet.js"></script>
     <script defer>
       // The 'defer' attribute ensures this script runs after the DOM is parsed
       // and after the 'spreadsheet.js' script has executed.
+      const fileManager = new FileManager();
       const spreadsheet = new Spreadsheet('spreadsheet-container');
+
+      // Initialize file manager when page loads
+      window.addEventListener('DOMContentLoaded', async () => {
+        await fileManager.initialize();
+      });
     </script>
   </body>
 </html>
