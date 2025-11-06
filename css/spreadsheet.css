@@ -4,13 +4,255 @@
 }
 
 body {
-  font-family: Arial, sans-serif;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   font-size: 13px;
   background-color: #ffffff;
   margin: 0;
-  padding: 0px;
+  padding: 0;
+  color: #202124;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ==================== FORMULA BAR STYLES ==================== */
+
+#formula-bar-container {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #dadce0;
+  padding: 0 8px;
+  flex-shrink: 0;
+  gap: 1px;
+}
+
+/* File Selector Dropdown */
+#file-selector-wrapper {
+  position: relative;
+  min-width: 150px;
+  max-width: 250px;
+  margin-right: 8px;
+}
+
+.file-selector-button {
+  width: 100%;
+  height: 28px;
+  padding: 0 10px;
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #202124;
+  transition: all 0.2s;
+}
+
+.file-selector-button:hover {
+  background-color: #f8f9fa;
+  border-color: #5f6368;
+}
+
+.file-selector-button:focus {
+  outline: none;
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 1px #1a73e8;
+}
+
+#current-file-name {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-arrow {
+  margin-left: 8px;
+  transition: transform 0.2s;
+}
+
+.file-selector-button.active .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+/* File Dropdown Menu */
+.file-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 280px;
+  max-width: 400px;
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.file-dropdown.hidden {
+  display: none;
+}
+
+.file-dropdown-header {
+  padding: 8px;
+  border-bottom: 1px solid #e8eaed;
+}
+
+.file-search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
+
+.file-search-input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 1px #1a73e8;
+}
+
+.file-dropdown-actions {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid #e8eaed;
+  background-color: #f8f9fa;
+}
+
+.dropdown-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 8px;
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #5f6368;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dropdown-action-btn:hover {
+  background-color: #f1f3f4;
   color: #202124;
 }
+
+.dropdown-action-btn.delete:hover {
+  background-color: #fce8e6;
+  color: #d93025;
+  border-color: #d93025;
+}
+
+.dropdown-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.file-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.file-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background-color 0.2s;
+}
+
+.file-item:hover {
+  background-color: #f8f9fa;
+}
+
+.file-item.active {
+  background-color: #e8f0fe;
+  color: #1967d2;
+}
+
+.file-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-item-date {
+  font-size: 11px;
+  color: #5f6368;
+  margin-left: 8px;
+}
+
+/* Cell Reference Display */
+.cell-reference {
+  width: 80px;
+  height: 28px;
+  padding: 0 8px;
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-family: 'Roboto Mono', monospace;
+  color: #202124;
+  margin-right: 8px;
+}
+
+/* Formula Function Symbol */
+.formula-function-symbol {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5f6368;
+  font-size: 14px;
+  font-weight: 500;
+  font-style: italic;
+  margin-right: 8px;
+}
+
+/* Formula Input Field */
+.formula-input {
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  background: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Roboto Mono', monospace;
+  color: #202124;
+  outline: none;
+}
+
+.formula-input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 1px #1a73e8;
+}
+
+.formula-input::placeholder {
+  color: #5f6368;
+  font-style: italic;
+}
+
+/* ==================== SPREADSHEET STYLES ==================== */
 
 /* Main container using CSS Grid */
 #spreadsheet-container {
@@ -18,29 +260,24 @@ body {
   grid-template-areas:
     'corner columns'
     'rows   cells';
-  grid-template-columns: 46px 1fr; /* 50px for row headers */
-  grid-template-rows: 24px 1fr; /* 25px for column headers */
-  height: calc(100vh - 40px);
+  grid-template-columns: 46px 1fr;
+  grid-template-rows: 24px 1fr;
+  flex: 1;
   overflow: hidden;
-  /* Prevents text selection on headers during drag */
   user-select: none;
 }
 
-/* The top-left corner cell needs to be sticky */
+/* The top-left corner cell */
 #corner-cell {
   position: sticky;
   top: 0;
   left: 0;
   z-index: 3;
-  /* border-right: 1px solid #d4d4d4; <-- REPLACED by .header-cell */
-  /* border-bottom: 1px solid #d4d4d4; <-- REPLACED by .header-cell */
-
-  /* ADDED: Add the missing top and left borders */
   border-top: 0.5px solid #dadce0;
   border-left: 0.5px solid #dadce0;
 }
 
-/* Base style for all header cells (A, B, 1, 2, etc.) */
+/* Base style for all header cells */
 .header-cell {
   font-family: Roboto, RobotoDraft, Helvetica, Arial, sans-serif;
   font-size: 10px;
@@ -48,18 +285,14 @@ body {
   color: #444746;
   font-weight: normal;
   padding: 0px;
-  /* border: 0.5px solid #999999; <-- REMOVED */
   text-align: center;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  /* Vertical and horizontal centering */
   display: flex;
   align-items: center;
   justify-content: center;
-
-  /* ADDED: Apply only right and bottom borders */
-  border-width: 0 0.5px 0.5px 0; /* Top, Right, Bottom, Left */
+  border-width: 0 0.5px 0.5px 0;
   border-style: solid;
   border-color: #c7c7c7;
 }
@@ -67,16 +300,13 @@ body {
 /* Base style for data cells */
 .cell {
   padding: 4px;
-  /* border: 0.5px solid #dddddd; <-- REMOVED */
   background-color: #ffffff;
   text-align: left;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  position: relative; /* Needed for z-index to work correctly */
-
-  /* ADDED: Apply only right and bottom borders */
-  border-width: 0 0.5px 0.5px 0; /* Top, Right, Bottom, Left */
+  position: relative;
+  border-width: 0 0.5px 0.5px 0;
   border-style: solid;
   border-color: #dddddd;
 }
@@ -86,11 +316,8 @@ body {
   grid-area: columns;
   display: grid;
   grid-auto-flow: column;
-  /* grid-auto-columns: 100px; <-- REMOVED */
   overflow: hidden;
   z-index: 2;
-
-  /* ADDED: Border for the top of the header row */
   border-top: 0.5px solid #dadce0;
 }
 
@@ -98,11 +325,8 @@ body {
 #row-headers {
   grid-area: rows;
   display: grid;
-  /* grid-auto-rows: 25px; <-- REMOVED */
   overflow: hidden;
   z-index: 1;
-
-  /* ADDED: Border for the left of the header column */
   border-left: 0.5px solid #dadce0;
 }
 
@@ -110,30 +334,20 @@ body {
 #cell-grid {
   grid-area: cells;
   display: grid;
-  /* grid-template-columns: repeat(26, 100px); <-- REMOVED */
-  /* grid-template-rows: repeat(100, 25px); <-- REMOVED */
   overflow: auto;
   z-index: 0;
-
-  /* ADDED: Borders for the top and left of the cell grid area */
   border-right: 0.5px solid #dddddd;
   border-bottom: 0.5px solid #dddddd;
 }
 
-/* --- NEW: Selection Styles --- */
-
-/* Style for the currently active cell (thick blue border) */
+/* Selection Styles */
 .cell.selected {
-  /* NOTE: This border will override the cell's default border */
   border: 1px solid #0e65eb;
-  /* Use z-index to ensure the border is not overlapped by adjacent cells */
   z-index: 4;
-  /* The padding needs to be reduced to account for the thicker border */
   padding: 2.5px;
 }
 
-/* --- NEW: Overlapping background styles --- */
-/* These classes are added dynamically based on how many ranges overlap a cell */
+/* Range selection background */
 .range-selected-1 {
   background-color: rgba(26, 115, 232, 0.1);
 }
@@ -146,7 +360,6 @@ body {
 .range-selected-4 {
   background-color: rgba(26, 115, 232, 0.34);
 }
-/* Add more if you expect more overlaps */
 .range-selected-5,
 .range-selected-6,
 .range-selected-7,
@@ -154,8 +367,7 @@ body {
   background-color: rgba(26, 115, 232, 0.4);
 }
 
-/* --- NEW: Thin border for selection perimeters --- */
-/* These rules still work perfectly with the new border model */
+/* Range selection borders */
 .range-border-top {
   border-top: 0.5px solid #1a73e8;
 }
@@ -170,14 +382,15 @@ body {
 }
 
 .header-highlight {
-  background-color: #d2e3fc; /* A slightly darker blue for contrast */
+  background-color: #d2e3fc;
   font-weight: bold;
 }
 
+/* Cell Editor */
 #cell-editor {
   position: absolute;
   display: none;
-  z-index: 5; /* Crucial: Must be higher than a selected cell's z-index */
+  z-index: 5;
   border: none;
   outline: none;
   background: transparent;
@@ -187,22 +400,52 @@ body {
   box-sizing: border-box;
 }
 
-/* Helper class to hide cell text during editing */
 .cell.editing {
   color: transparent;
 }
-/* --- NEW: Drag-to-move styles --- */
 
-/* Class to set the cursor on the grid container */
+/* Drag cursor */
 .grab-cursor {
   cursor: grab;
 }
 
-/* The ghost element for dragging */
+/* Drag ghost element */
 #drag-ghost {
   position: absolute;
   border: 2px dashed #1a73e8;
   background-color: rgba(26, 115, 232, 0.05);
   z-index: 10;
-  pointer-events: none; /* Allows mouse events to pass through to cells underneath */
+  pointer-events: none;
+}
+
+/* Scrollbar styling */
+#cell-grid::-webkit-scrollbar,
+.file-list::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+#cell-grid::-webkit-scrollbar-track,
+.file-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+#cell-grid::-webkit-scrollbar-thumb,
+.file-list::-webkit-scrollbar-thumb {
+  background: #dadce0;
+  border-radius: 6px;
+}
+
+#cell-grid::-webkit-scrollbar-thumb:hover,
+.file-list::-webkit-scrollbar-thumb:hover {
+  background: #bdc1c6;
+}
+
+#cell-grid::-webkit-scrollbar-corner {
+  background: #f1f1f1;
+}
+
+/* Utility classes */
+.hidden {
+  display: none !important;
 }

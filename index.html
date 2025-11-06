@@ -7,6 +7,88 @@
     <link rel="stylesheet" href="css/spreadsheet.css" />
   </head>
   <body>
+    <!-- Formula bar container -->
+    <div id="formula-bar-container">
+      <!-- File selector dropdown -->
+      <div id="file-selector-wrapper">
+        <button id="file-selector-button" class="file-selector-button">
+          <span id="current-file-name">Loading...</span>
+          <svg class="dropdown-arrow" width="10" height="6" viewBox="0 0 10 6">
+            <path
+              d="M0 0 L5 5 L10 0"
+              stroke="currentColor"
+              stroke-width="1.5"
+              fill="none"
+            />
+          </svg>
+        </button>
+        <div id="file-dropdown" class="file-dropdown hidden">
+          <div class="file-dropdown-header">
+            <input
+              type="text"
+              id="file-search"
+              placeholder="Search files..."
+              class="file-search-input"
+            />
+          </div>
+          <div class="file-dropdown-actions">
+            <button id="new-file-btn" class="dropdown-action-btn">
+              <svg width="14" height="14" viewBox="0 0 14 14">
+                <path
+                  d="M7 2 L7 12 M2 7 L12 7"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+              </svg>
+              New File
+            </button>
+            <button id="rename-file-btn" class="dropdown-action-btn">
+              <svg width="14" height="14" viewBox="0 0 14 14">
+                <path
+                  d="M2 12 L12 12 M7 2 L10 5 L6 9 L2 10 L3 6 Z"
+                  stroke="currentColor"
+                  stroke-width="1"
+                  fill="none"
+                />
+              </svg>
+              Rename
+            </button>
+            <button id="delete-file-btn" class="dropdown-action-btn delete">
+              <svg width="14" height="14" viewBox="0 0 14 14">
+                <path
+                  d="M3 4 L11 4 M4 4 L4 2 L10 2 L10 4 M5 6 L5 10 M9 6 L9 10 M4 4 L4 12 L10 12 L10 4"
+                  stroke="currentColor"
+                  stroke-width="1"
+                  fill="none"
+                />
+              </svg>
+              Delete
+            </button>
+          </div>
+          <div id="file-list" class="file-list">
+            <!-- File items will be dynamically added here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Cell reference display -->
+      <div id="cell-reference" class="cell-reference">A1</div>
+
+      <!-- Function symbol -->
+      <div class="formula-function-symbol">
+        <span>fx</span>
+      </div>
+
+      <!-- Formula input -->
+      <input
+        type="text"
+        id="formula-input"
+        class="formula-input"
+        placeholder="Enter formula or value..."
+      />
+    </div>
+
+    <!-- Main spreadsheet container -->
     <div id="spreadsheet-container">
       <input
         type="text"
