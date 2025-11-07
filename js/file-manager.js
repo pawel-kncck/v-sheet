@@ -4,7 +4,7 @@
  */
 class FileManager {
   constructor() {
-    this.baseUrl = 'http://localhost:5000/api';
+    this.baseUrl = `${window.location.origin}/api`;
     this.currentFile = null;
     this.files = [];
     this.saveTimeout = null;
@@ -24,6 +24,14 @@ class FileManager {
    */
   async initialize() {
     try {
+      // First check if the server is accessible
+      const healthCheck = await fetch(`${window.location.origin}/health`).catch(
+        () => null
+      );
+      if (!healthCheck || !healthCheck.ok) {
+        throw new Error('Backend server is not accessible at ' + this.baseUrl);
+      }
+
       // Load the list of files
       await this.loadFileList();
 
@@ -44,6 +52,12 @@ class FileManager {
       return true;
     } catch (error) {
       this.handleError('Failed to initialize file manager', error);
+      // Show more specific error to user
+      if (error.message.includes('Backend server is not accessible')) {
+        alert(
+          'Cannot connect to backend server. Please ensure the Flask server is running on port 5000.'
+        );
+      }
       return false;
     }
   }
@@ -369,7 +383,14 @@ class FileManager {
    * Update metadata (last active cell, selections, etc.)
    */
   updateMetadata(metadata) {
-    if (!this.currentFile) return;
+    if (!this.currentFile) {
+      console.warn('Cannot update metadata: no current file loaded');
+      return;
+    }
+
+    if (!this.currentFile.data) {
+      this.currentFile.data = {};
+    }
 
     this.currentFile.data.metadata = {
       ...this.currentFile.data.metadata,

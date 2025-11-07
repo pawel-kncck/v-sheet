@@ -293,15 +293,33 @@ class FormulaBar {
   async handleNewFile() {
     const name = prompt('Enter file name:', 'New Spreadsheet');
     if (name) {
-      await this.fileManager.createNewFile(name);
-      // Clear spreadsheet for new file
-      if (this.spreadsheet && this.spreadsheet.clear) {
-        this.spreadsheet.clear();
+      // Create the new file first
+      const newFile = await this.fileManager.createNewFile(name);
+
+      if (newFile) {
+        // Only clear and reload after file is successfully created
+        if (this.spreadsheet) {
+          // Temporarily disconnect the fileManager to prevent metadata updates during clear
+          const tempFileManager = this.spreadsheet.fileManager;
+          this.spreadsheet.fileManager = null;
+
+          // Clear the spreadsheet
+          if (this.spreadsheet.clear) {
+            this.spreadsheet.clear();
+          }
+
+          // Restore fileManager connection
+          this.spreadsheet.fileManager = tempFileManager;
+
+          // Load the new file data
+          if (this.spreadsheet.loadFromFile) {
+            this.spreadsheet.loadFromFile(
+              this.fileManager.getCurrentFileData()
+            );
+          }
+        }
       }
-      // Load the new empty file structure
-      if (this.spreadsheet && this.spreadsheet.loadFromFile) {
-        this.spreadsheet.loadFromFile(this.fileManager.getCurrentFileData());
-      }
+
       this.closeFileDropdown();
     }
   }

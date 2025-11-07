@@ -115,26 +115,38 @@
           // Create instances
           spreadsheet = new Spreadsheet('spreadsheet-container');
           fileManager = new FileManager();
-          formulaBar = new FormulaBar(fileManager, spreadsheet);
 
-          // Connect components
-          spreadsheet.setFileManager(fileManager);
-          spreadsheet.setFormulaBar(formulaBar);
-
-          // Initialize file manager (will load recent file)
+          // Initialize file manager first
           const initialized = await fileManager.initialize();
 
           if (initialized) {
+            // Only create formula bar after file manager is ready
+            formulaBar = new FormulaBar(fileManager, spreadsheet);
+
+            // Connect components
+            spreadsheet.setFileManager(fileManager);
+            spreadsheet.setFormulaBar(formulaBar);
+
             // Load the spreadsheet data from the current file
             const fileData = fileManager.getCurrentFileData();
             if (fileData) {
               spreadsheet.loadFromFile(fileData);
             }
-          }
 
-          console.log('Spreadsheet application initialized successfully');
+            console.log('Spreadsheet application initialized successfully');
+          } else {
+            console.error(
+              'Failed to initialize file manager - application cannot start'
+            );
+            alert(
+              'Failed to connect to the server. Please ensure the Flask server is running.'
+            );
+          }
         } catch (error) {
           console.error('Failed to initialize spreadsheet:', error);
+          alert(
+            'Application initialization failed. Check the console for details.'
+          );
         }
       });
     </script>
