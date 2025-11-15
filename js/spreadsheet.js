@@ -104,9 +104,15 @@ class Spreadsheet {
         `[data-id='${cellId}']`
       );
       if (cell) {
-        // This is where the magic happens:
-        // We set the display text based on the worker's result.
+        // Update the display text
         cell.textContent = value === undefined ? '' : value;
+
+        // ALSO update our internal cellData cache for navigation functions
+        if (value === undefined || value === '' || value === null) {
+          delete this.cellData[cellId];
+        } else {
+          this.cellData[cellId] = value;
+        }
       }
     }
   }
@@ -138,6 +144,9 @@ class Spreadsheet {
 
     // 1. Clear existing data (DOM and state)
     this.clear();
+
+    // Clear cellData cache as well
+    this.cellData = {};
 
     // 2. --- NEW LOGIC ---
     // Send the raw cell data to the worker for processing.
@@ -1273,6 +1282,9 @@ class Spreadsheet {
               payload: { cellId },
             });
           }
+
+          // After telling the worker to clear the cell, also clear our cache
+          delete this.cellData[cellId];
         }
       }
     });
