@@ -108,39 +108,70 @@
       let fileManager;
       let formulaBar;
       let spreadsheet;
+      let formulaWorker; // <<< 1. Add new variable
 
       // Initialize everything when page loads
       window.addEventListener('DOMContentLoaded', async () => {
         try {
-          // Create instances
-          spreadsheet = new Spreadsheet('spreadsheet-container');
-          fileManager = new FileManager();
+          // --- 2. Create the Formula Worker ---
+          formulaWorker = new Worker('js/engine/formula-worker.js', {
+            type: 'module',
+          });
 
-          // Initialize file manager first
-          const initialized = await fileManager.initialize();
-
-          if (initialized) {
-            // Only create formula bar after file manager is ready
-            formulaBar = new FormulaBar(fileManager, spreadsheet);
-
-            // Connect components
-            spreadsheet.setFileManager(fileManager);
-            spreadsheet.setFormulaBar(formulaBar);
-
-            // Load the spreadsheet data from the current file
-            const fileData = fileManager.getCurrentFileData();
-            if (fileData) {
-              spreadsheet.loadFromFile(fileData);
+          // Listen for the worker to tell us it's ready
+          formulaWorker.onmessage = (event) => {
+            if (event.data.type === 'ready') {
+              console.log('Formula Worker is ready.');
+              // Now we can continue with file loading
+              initializeApplication();
+            } else if (event.data.type === 'error') {
+              console.error(
+                'Worker initialization error:',
+                event.data.payload.message
+              );
+              alert('Critical: Formula engine failed to start.');
             }
+          };
 
-            console.log('Spreadsheet application initialized successfully');
-          } else {
-            console.error(
-              'Failed to initialize file manager - application cannot start'
-            );
-            alert(
-              'Failed to connect to the server. Please ensure the Flask server is running.'
-            );
+          // --- 3. Move the rest of the init logic into a function ---
+          // We can't load the file until the worker is ready.
+          async function initializeApplication() {
+            // Create instances, passing the worker to the spreadsheet
+            spreadsheet = new Spreadsheet(
+              'spreadsheet-container',
+              formulaWorker
+            ); // <<< 4. Pass worker
+            fileManager = new FileManager();
+
+            // Initialize file manager first
+            const initialized = await fileManager.initialize();
+
+            if (initialized) {
+              // Only create formula bar after file manager is ready
+              formulaBar = new FormulaBar(fileManager, spreadsheet);
+
+              // Connect components
+              spreadsheet.setFileManager(fileManager);
+              spreadsheet.setFormulaBar(formulaBar);
+
+              // Tell the spreadsheet to set up its worker listeners
+              spreadsheet.setFormulaWorker(formulaWorker); // <<< 5. Set up worker in spreadsheet
+
+              // Load the spreadsheet data from the current file
+              const fileData = fileManager.getCurrentFileData();
+              if (fileData) {
+                spreadsheet.loadFromFile(fileData);
+              }
+
+              console.log('Spreadsheet application initialized successfully');
+            } else {
+              console.error(
+                'Failed to initialize file manager - application cannot start'
+              );
+              alert(
+                'Failed to connect to the server. Please ensure the Flask server is running.'
+              );
+            }
           }
         } catch (error) {
           console.error('Failed to initialize spreadsheet:', error);

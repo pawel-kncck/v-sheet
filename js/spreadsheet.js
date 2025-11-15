@@ -47,6 +47,7 @@ class Spreadsheet {
     // --- Integration with FileManager and FormulaBar ---
     this.fileManager = null;
     this.formulaBar = null;
+    this.formulaWorker = null;
 
     this._createGrid();
     this._syncScroll();
@@ -59,6 +60,56 @@ class Spreadsheet {
   }
 
   // --- New Integration Methods ---
+
+  /**
+   * Set the FormulaWorker instance and set up listeners
+   */
+  setFormulaWorker(worker) {
+    this.formulaWorker = worker;
+
+    // --- 2. This is the "Receive" flow ---
+    // Listen for all messages from the worker
+    this.formulaWorker.onmessage = (event) => {
+      const { type, payload } = event.data;
+
+      switch (type) {
+        // This message contains all calculated values
+        case 'updates':
+          this._applyUpdates(payload.updates);
+          break;
+
+        // This message signals the initial load is done
+        case 'loadComplete':
+          console.log('Worker has finished loading file.');
+          // You could show the grid here
+          break;
+
+        // Handle any errors from the worker
+        case 'error':
+          console.error('Formula Worker Error:', payload.message);
+          // You could show an error to the user
+          break;
+      }
+    };
+  }
+
+  /**
+   * Helper method to apply updates from the worker to the DOM
+   * @param {Object} updates - e.g., { "A1": 10, "B2": "Hello" }
+   * @private
+   */
+  _applyUpdates(updates) {
+    for (const [cellId, value] of Object.entries(updates)) {
+      const cell = this.cellGridContainer.querySelector(
+        `[data-id='${cellId}']`
+      );
+      if (cell) {
+        // This is where the magic happens:
+        // We set the display text based on the worker's result.
+        cell.textContent = value === undefined ? '' : value;
+      }
+    }
+  }
 
   /**
    * Set the FileManager instance for integration
@@ -85,22 +136,26 @@ class Spreadsheet {
   loadFromFile(fileData) {
     if (!fileData) return;
 
-    // Clear existing data
+    // 1. Clear existing data (DOM and state)
     this.clear();
 
-    // Load cells
-    if (fileData.cells) {
-      this.cellData = {};
-      Object.entries(fileData.cells).forEach(([cellId, cellInfo]) => {
-        this.cellData[cellId] = cellInfo.value;
-        const cell = this.cellGridContainer.querySelector(
-          `[data-id='${cellId}']`
-        );
-        if (cell) {
-          cell.textContent = cellInfo.value;
-        }
+    // 2. --- NEW LOGIC ---
+    // Send the raw cell data to the worker for processing.
+    // The worker will parse, calculate, and send back an 'updates'
+    // message, which our listener in `setFormulaWorker` will catch.
+    if (this.formulaWorker) {
+      this.formulaWorker.postMessage({
+        type: 'load',
+        payload: { fileCellData: fileData.cells || {} },
       });
+    } else {
+      console.error('Formula worker not ready, cannot load file.');
+      // You could implement a fallback to the old logic here if needed
     }
+
+    // 3. --- KEEP THIS LOGIC ---
+    // Column widths, row heights, and metadata are UI-only
+    // and can be applied immediately.
 
     // Load column widths
     if (fileData.columnWidths && fileData.columnWidths.length === this.COLS) {
@@ -467,11 +522,16 @@ class Spreadsheet {
       this.selectionAnchor = coords;
       this.selections = [{ start: coords, end: coords }];
 
-      // Update formula bar
+      // --- UPDATED FORMULA BAR LOGIC ---
       if (this.formulaBar) {
         const cellId = cell.dataset.id;
         this.formulaBar.updateCellReference(cellId);
-        this.formulaBar.updateFormulaInput(this.cellData[cellId] || '');
+
+        // 1. Get the "raw" value from our fileManager "source of truth"
+        const rawValue = this.fileManager.getRawCellValue(cellId);
+
+        // 2. Send that raw value to the formula bar
+        this.formulaBar.updateFormulaInput(rawValue);
       }
     }
     this._renderSelections();
@@ -1193,7 +1253,26 @@ class Spreadsheet {
       for (let col = minCol; col <= maxCol; col++) {
         for (let row = minRow; row <= maxRow; row++) {
           const cell = this._getCellElement({ col, row });
-          this._updateCell(cell, '');
+          if (!cell) continue;
+
+          const cellId = cell.dataset.id;
+
+          // --- NEW LOGIC ---
+
+          // 1. Tell the fileManager to clear the cell's raw data.
+          //    (Its logic already handles deleting the key for empty values)
+          if (this.fileManager) {
+            this.fileManager.updateCellData(cellId, '');
+          }
+
+          // 2. Tell the worker to clear the cell, which will
+          //    trigger the correct recalculation of dependents.
+          if (this.formulaWorker) {
+            this.formulaWorker.postMessage({
+              type: 'clearCell',
+              payload: { cellId },
+            });
+          }
         }
       }
     });
@@ -1206,23 +1285,40 @@ class Spreadsheet {
 
     const cellId = cell.dataset.id;
 
-    if (value) {
-      this.cellData[cellId] = value;
-      cell.textContent = value;
-    } else {
-      delete this.cellData[cellId];
-      cell.textContent = '';
-    }
+    // --- NEW LOGIC ---
 
-    // Update FileManager
+    // 1. Save the raw value/formula to the file manager.
+    // This is critical. The file manager stores the "truth".
     if (this.fileManager) {
       this.fileManager.updateCellData(cellId, value);
     }
 
-    // Update Formula Bar if this is the active cell
-    if (this.formulaBar && this.activeCell === cell) {
-      this.formulaBar.updateFormulaInput(value);
+    // 2. Send the new value/formula to the worker for processing.
+    if (this.formulaWorker) {
+      const stringValue = String(value || '');
+
+      if (stringValue.startsWith('=')) {
+        // This is a formula. Tell the worker to parse and evaluate.
+        this.formulaWorker.postMessage({
+          type: 'setFormula',
+          payload: { cellId, formulaString: stringValue },
+        });
+      } else {
+        // This is a raw value. Tell the worker to set it.
+        this.formulaWorker.postMessage({
+          type: 'setCellValue',
+          payload: { cellId, value: value },
+        });
+      }
     }
+
+    // 3. --- DELETED LOGIC ---
+    // We NO LONGER set `this.cellData` or `cell.textContent` here.
+    // The worker will send back an 'updates' message, and our
+    // `_applyUpdates` method will set the textContent.
+
+    // We also NO LONGER update the formula bar here.
+    // That will be handled in the next step (cell selection).
   }
 
   _getCellCoords(cell) {

@@ -490,6 +490,26 @@ class FileManager {
   }
 
   /**
+   * --- ADD THIS NEW METHOD ---
+   * Get the raw value (formula string or text) for a specific cell.
+   * @param {string} cellId - The ID of the cell (e.g., "A1").
+   * @returns {string} The raw value (e.g., "=A1+B1" or "5").
+   */
+  getRawCellValue(cellId) {
+    if (
+      !this.currentFile ||
+      !this.currentFile.data ||
+      !this.currentFile.data.cells
+    ) {
+      return '';
+    }
+    const cellInfo = this.currentFile.data.cells[cellId];
+
+    // cellInfo.value holds the raw string we saved
+    return cellInfo ? cellInfo.value : '';
+  }
+
+  /**
    * Clear all data (useful for testing or reset)
    */
   clear() {
