@@ -449,3 +449,17 @@ body {
 .hidden {
   display: none !important;
 }
+
+.cell.copy-source {
+  border: 1px dashed #1a73e8 !important;
+  animation: marching-ants 1s linear infinite;
+}
+
+@keyframes marching-ants {
+  0% {
+    border-dashoffset: 0;
+  }
+  100% {
+    border-dashoffset: 8;
+  }
+}

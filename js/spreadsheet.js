@@ -57,6 +57,13 @@ class Spreadsheet {
     const firstCell = this.cellGridContainer.querySelector("[data-id='A1']");
     this._setActiveCell(firstCell);
     this._handleCellSelection(firstCell, false, false);
+
+    // In spreadsheet.js constructor
+    this.clipboard = {
+      data: null,
+      copiedCells: new Set(), // Track which cells have been copied for visual feedback
+      timestamp: null,
+    };
   }
 
   // --- New Integration Methods ---
@@ -447,6 +454,12 @@ class Spreadsheet {
       } else if (key.length === 1 && !isCmd && !e.altKey) {
         e.preventDefault();
         this._startEditing(this.activeCell, key);
+      } else if ((isCmd || e.ctrlKey) && key === 'c') {
+        e.preventDefault();
+        this._handleCopy();
+      } else if ((isCmd || e.ctrlKey) && key === 'v') {
+        e.preventDefault();
+        this._handlePaste();
       }
     });
 
@@ -1364,5 +1377,109 @@ class Spreadsheet {
     } else if (cellRect.left < gridRect.left) {
       grid.scrollLeft -= gridRect.left - cellRect.left;
     }
+  }
+
+  _handleCopy() {
+    // Clear previous copy visual indicators
+    this._clearCopyIndicators();
+
+    // Get current selection
+    const cellsToCopy = this._getSelectedCells();
+
+    // Store in clipboard
+    this.clipboard = {
+      data: cellsToCopy.map((cell) => ({
+        cellId: cell.dataset.id,
+        value: this.fileManager.getRawCellValue(cell.dataset.id),
+        relativePos: this._getRelativePosition(cell, cellsToCopy[0]),
+      })),
+      sourceBounds: this._getSelectionBounds(),
+      timestamp: Date.now(),
+    };
+
+    // Add visual feedback (dotted border on copied cells)
+    this._showCopyIndicators(cellsToCopy);
+
+    // Also copy to system clipboard as tab-delimited text
+    this._copyToSystemClipboard(cellsToCopy);
+  }
+
+  _handlePaste() {
+    if (!this.clipboard.data) return;
+
+    // Get paste target
+    const targetCell = this.activeCell;
+    const targetCoords = this._getCellCoords(targetCell);
+
+    // For now, just paste values (no formula adjustment)
+    this.clipboard.data.forEach((cellData) => {
+      const newRow = targetCoords.row + cellData.relativePos.row;
+      const newCol = targetCoords.col + cellData.relativePos.col;
+
+      // Check bounds
+      if (
+        newRow <= this.ROWS &&
+        newCol < this.COLS &&
+        newRow > 0 &&
+        newCol >= 0
+      ) {
+        const targetCellElement = this._getCellElement({
+          row: newRow,
+          col: newCol,
+        });
+        if (targetCellElement) {
+          // For Step 1: Just paste the value as-is
+          // This will work fine for plain values
+          // Formulas will be pasted as text (won't calculate yet)
+          this._updateCell(targetCellElement, cellData.value);
+        }
+      }
+    });
+
+    // Clear copy indicators after paste
+    this._clearCopyIndicators();
+  }
+
+  _getSelectedCells() {
+    const cells = [];
+    this.selections.forEach((selection) => {
+      const { start, end } = selection;
+      const minCol = Math.min(start.col, end.col);
+      const maxCol = Math.max(start.col, end.col);
+      const minRow = Math.min(start.row, end.row);
+      const maxRow = Math.max(start.row, end.row);
+
+      for (let row = minRow; row <= maxRow; row++) {
+        for (let col = minCol; col <= maxCol; col++) {
+          const cell = this._getCellElement({ row, col });
+          if (cell) cells.push(cell);
+        }
+      }
+    });
+    return cells;
+  }
+
+  _getRelativePosition(cell, anchorCell) {
+    const cellCoords = this._getCellCoords(cell);
+    const anchorCoords = this._getCellCoords(anchorCell);
+    return {
+      row: cellCoords.row - anchorCoords.row,
+      col: cellCoords.col - anchorCoords.col,
+    };
+  }
+
+  _getSelectionBounds() {
+    // Calculate min/max row and col from all selections
+    // Return { minRow, maxRow, minCol, maxCol }
+  }
+
+  _copyToSystemClipboard(cells) {
+    // Create tab-delimited text
+    // Use navigator.clipboard.writeText() if available
+    // Fallback to document.execCommand('copy')
+  }
+
+  _clearCopyIndicators() {
+    // Placeholder - this function has to be written later
   }
 }
