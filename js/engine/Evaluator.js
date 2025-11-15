@@ -6,12 +6,12 @@
  */
 
 // --- 1. Import our utilities (no more placeholders) ---
-import { TypeCoercion } from '../utils/TypeCoercion.js';
+import { TypeCoercion } from './utils/TypeCoercion.js';
 import {
   FormulaError,
   DivZeroError,
   NameError,
-} from '../utils/FormulaErrors.js';
+} from './utils/FormulaErrors.js';
 
 class Evaluator {
   /**

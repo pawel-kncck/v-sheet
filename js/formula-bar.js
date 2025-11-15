@@ -425,6 +425,10 @@ class FormulaBar {
 
     // Remove focus from formula input
     this.elements.formulaInput.blur();
+
+    if (this.spreadsheet && this.spreadsheet.cellGridContainer) {
+      this.spreadsheet.cellGridContainer.focus();
+    }
   }
 
   /**
@@ -439,6 +443,10 @@ class FormulaBar {
 
     // Remove focus
     this.elements.formulaInput.blur();
+
+    if (this.spreadsheet && this.spreadsheet.cellGridContainer) {
+      this.spreadsheet.cellGridContainer.focus();
+    }
   }
 
   /**

@@ -115,6 +115,13 @@ class FormulaEngine {
       return this.setCellValue(cellId, formulaString);
     }
 
+    // ✅ Check if the formula is exactly the same
+    const existingData = this.cellData.get(cellId);
+    if (existingData && existingData.formula === formulaString) {
+      // Formula hasn't changed, return current value without recalculating
+      return { [cellId]: existingData.value };
+    }
+
     // 1. Parse the string into an Abstract Syntax Tree (AST)
     let ast;
     try {

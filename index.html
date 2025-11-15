@@ -108,7 +108,7 @@
       let fileManager;
       let formulaBar;
       let spreadsheet;
-      let formulaWorker; // <<< 1. Add new variable
+      let formulaWorker;
 
       // Initialize everything when page loads
       window.addEventListener('DOMContentLoaded', async () => {
@@ -117,6 +117,15 @@
           formulaWorker = new Worker('js/engine/formula-worker.js', {
             type: 'module',
           });
+
+          // Add error handler IMMEDIATELY after creation
+          formulaWorker.onerror = (error) => {
+            console.error('❌ Worker Error:', error);
+            console.error('Message:', error.message);
+            console.error('Filename:', error.filename);
+            console.error('Line:', error.lineno);
+            alert('Worker failed to load: ' + error.message);
+          };
 
           // Listen for the worker to tell us it's ready
           formulaWorker.onmessage = (event) => {

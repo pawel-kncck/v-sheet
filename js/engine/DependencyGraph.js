@@ -71,15 +71,44 @@ class DependencyGraph {
    * @returns {boolean} - True if a circular reference is detected, false otherwise.
    */
   checkForCircularReference(cellId, newDependencies) {
-    // We are checking if setting B1 = A1 would cause a circle.
-    // We need to see if A1 (or any of its dependents) already depends on B1.
-    for (const dep of newDependencies) {
-      if (dep === cellId) return true; // Simple self-reference (A1 = A1)
-      if (this._traceDependents(dep, cellId, new Set())) {
-        return true;
+    // ✅ Save and temporarily remove the old edges
+    const oldDependencies = this.dependencies.get(cellId);
+
+    if (oldDependencies) {
+      for (const dep of oldDependencies) {
+        const dependents = this.dependents.get(dep);
+        if (dependents) {
+          dependents.delete(cellId);
+        }
       }
     }
-    return false;
+
+    // Check for cycles with clean graph
+    let hasCircularRef = false;
+
+    for (const dep of newDependencies) {
+      if (dep === cellId) {
+        hasCircularRef = true;
+        break;
+      }
+      if (this._traceDependents(dep, cellId, new Set())) {
+        hasCircularRef = true;
+        break;
+      }
+    }
+
+    // ✅ Restore old edges if check failed (so graph is unchanged)
+    if (oldDependencies && hasCircularRef) {
+      for (const dep of oldDependencies) {
+        if (!this.dependents.has(dep)) {
+          this.dependents.set(dep, new Set());
+        }
+        this.dependents.get(dep).add(cellId);
+      }
+    }
+    // Note: If no circular ref, updateDependencies() will handle the cleanup
+
+    return hasCircularRef;
   }
 
   /**
@@ -87,23 +116,37 @@ class DependencyGraph {
    * Traces all dependents of `currentCell` to see if we ever find `targetCell`.
    * @private
    */
+  // In DependencyGraph.js
   _traceDependents(currentCell, targetCell, visited) {
+    console.log(
+      `  Tracing: ${currentCell} -> looking for ${targetCell}, visited:`,
+      Array.from(visited)
+    );
+
     if (visited.has(currentCell)) {
-      return false; // Already checked this path
+      console.log(`  Already visited ${currentCell}, returning false`);
+      return false;
     }
     visited.add(currentCell);
 
     const dependents = this.dependents.get(currentCell);
+    console.log(
+      `  Dependents of ${currentCell}:`,
+      dependents ? Array.from(dependents) : 'none'
+    );
+
     if (!dependents) {
-      return false; // No dependents, dead end
+      return false;
     }
 
     for (const dependent of dependents) {
+      console.log(`  Checking dependent: ${dependent}`);
       if (dependent === targetCell) {
-        return true; // Found the circle!
+        console.log(`  ✅ FOUND TARGET! ${dependent} === ${targetCell}`);
+        return true;
       }
       if (this._traceDependents(dependent, targetCell, visited)) {
-        return true; // Found a circle in a deeper branch
+        return true;
       }
     }
 

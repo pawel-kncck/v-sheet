@@ -42,6 +42,17 @@ self.onmessage = (event) => {
     switch (type) {
       case 'load':
         engine.loadData(payload.fileCellData);
+
+        const initialUpdates = {};
+        for (const [cellId, cellData] of engine.cellData.entries()) {
+          initialUpdates[cellId] = cellData.value;
+        }
+
+        self.postMessage({
+          type: 'updates',
+          payload: { updates: initialUpdates },
+        });
+
         self.postMessage({ type: 'loadComplete' });
         break;
 

@@ -43,10 +43,3 @@ export const mathFunctions = {
   // AVERAGE,
   // COUNT,
 };
-
-// Export all functions as an object
-export const mathFunctions = {
-  SUM,
-  // AVERAGE,
-  // COUNT,
-};
