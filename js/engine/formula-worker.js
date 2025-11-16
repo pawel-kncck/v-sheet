@@ -10,6 +10,7 @@
 // 1. Import the *one* class we need.
 // The FormulaEngine will handle importing all its own dependencies.
 import { FormulaEngine } from './FormulaEngine.js';
+import { Logger } from './utils/Logger.js';
 
 /**
  * The single, global instance of the FormulaEngine for this worker.
@@ -19,9 +20,9 @@ let engine;
 
 try {
   engine = new FormulaEngine();
-  console.log('Formula Worker: Engine initialized successfully.');
+  Logger.log('FormulaWorker', 'Engine initialized successfully.'); // <-- CHANGE
 } catch (e) {
-  console.error('Worker failed to instantiate FormulaEngine', e);
+  Logger.error('FormulaWorker', 'Failed to instantiate FormulaEngine', e); // <-- CHANGE
   self.postMessage({
     type: 'error',
     payload: { message: 'Engine instantiation failed: ' + e.message },
@@ -40,6 +41,13 @@ self.onmessage = (event) => {
 
   try {
     switch (type) {
+      case 'setDebugFlag':
+        Logger.setDebugFlag(payload.isEnabled);
+        Logger.log(
+          'FormulaWorker',
+          `Debug logging set to: ${payload.isEnabled}`
+        );
+        break;
       case 'load':
         engine.loadData(payload.fileCellData);
 
@@ -78,11 +86,11 @@ self.onmessage = (event) => {
       }
 
       default:
-        console.warn(`Worker: Unknown message type received: ${type}`);
+        Logger.warn('FormulaWorker', `Unknown message type received: ${type}`);
     }
   } catch (e) {
     // Catch any unexpected errors during processing
-    console.error(`Worker: Error processing ${type}`, e);
+    Logger.error('FormulaWorker', `Error processing ${type}`, e);
     self.postMessage({
       type: 'error',
       payload: { message: e.message, stack: e.stack },

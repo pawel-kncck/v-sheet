@@ -11,6 +11,8 @@
  * This structure allows for fast updates, circular reference detection,
  * and topological sorting for recalculation.
  */
+import { Logger } from './utils/Logger.js';
+
 class DependencyGraph {
   constructor() {
     /**
@@ -63,7 +65,7 @@ class DependencyGraph {
   /**
    * Checks if adding a new dependency would create a circular reference.
    * It does this by checking if any of the new dependencies (or their
-   * dependents, recursively) already trace back to the cell being set.
+   * precedents, recursively) already trace back to the cell being set.
    *
    * @param {string} cellId - The cell being set (e.g., "B1").
    * @param {Set<string>} newDependencies - The dependencies of the new formula
@@ -91,7 +93,11 @@ class DependencyGraph {
         hasCircularRef = true;
         break;
       }
-      if (this._traceDependents(dep, cellId, new Set())) {
+      // --- THIS IS THE FIX ---
+      // We trace *precedents* (up-stream) from the new dependency
+      // to see if we ever find the cellId we are trying to set.
+      if (this._tracePrecedents(dep, cellId, new Set())) {
+        // --- END FIX ---
         hasCircularRef = true;
         break;
       }
@@ -113,39 +119,50 @@ class DependencyGraph {
 
   /**
    * Recursive helper for circular reference detection.
-   * Traces all dependents of `currentCell` to see if we ever find `targetCell`.
+   * Traces all *precedents* of `currentCell` to see if we ever find `targetCell`.
    * @private
    */
-  // In DependencyGraph.js
-  _traceDependents(currentCell, targetCell, visited) {
-    console.log(
-      `  Tracing: ${currentCell} -> looking for ${targetCell}, visited:`,
+  // --- THIS IS THE CORRECTED FUNCTION ---
+  _tracePrecedents(currentCell, targetCell, visited) {
+    Logger.log(
+      'DependencyGraph',
+      `Tracing Precedents: ${currentCell} -> looking for ${targetCell}, visited:`,
       Array.from(visited)
     );
 
     if (visited.has(currentCell)) {
-      console.log(`  Already visited ${currentCell}, returning false`);
+      Logger.log(
+        'DependencyGraph',
+        `Already visited ${currentCell}, returning false`
+      );
       return false;
     }
     visited.add(currentCell);
 
-    const dependents = this.dependents.get(currentCell);
-    console.log(
-      `  Dependents of ${currentCell}:`,
-      dependents ? Array.from(dependents) : 'none'
+    // FIX: Check 'this.dependencies', not 'this.dependents'
+    const precedents = this.dependencies.get(currentCell);
+    Logger.log(
+      'DependencyGraph',
+      `Precedents of ${currentCell}:`,
+      precedents ? Array.from(precedents) : 'none'
     );
 
-    if (!dependents) {
+    if (!precedents) {
       return false;
     }
 
-    for (const dependent of dependents) {
-      console.log(`  Checking dependent: ${dependent}`);
-      if (dependent === targetCell) {
-        console.log(`  ✅ FOUND TARGET! ${dependent} === ${targetCell}`);
+    // FIX: Iterate 'precedents', not 'dependents'
+    for (const precedent of precedents) {
+      Logger.log('DependencyGraph', `Checking precedent: ${precedent}`);
+      if (precedent === targetCell) {
+        Logger.log(
+          'DependencyGraph',
+          `✅ FOUND TARGET! ${precedent} === ${targetCell}`
+        );
         return true;
       }
-      if (this._traceDependents(dependent, targetCell, visited)) {
+      // FIX: Recurse with '_tracePrecedents'
+      if (this._tracePrecedents(precedent, targetCell, visited)) {
         return true;
       }
     }

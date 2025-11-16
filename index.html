@@ -119,7 +119,16 @@
           formulaWorker = new Worker('js/engine/formula-worker.js', {
             type: 'module',
           });
-
+          // Check for the debug flag and send it to the worker
+          try {
+            const isDebug = sessionStorage.getItem('vsheet-debug') === 'true';
+            formulaWorker.postMessage({
+              type: 'setDebugFlag',
+              payload: { isEnabled: isDebug },
+            });
+          } catch (e) {
+            console.warn('Could not check sessionStorage for debug flag.');
+          }
           // Add error handler IMMEDIATELY after creation
           formulaWorker.onerror = (error) => {
             console.error('❌ Worker Error:', error);

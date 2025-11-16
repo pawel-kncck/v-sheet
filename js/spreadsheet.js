@@ -1,12 +1,16 @@
 // History Management
 import { HistoryManager } from './history/HistoryManager.js';
 import { UpdateCellsCommand } from './history/commands/UpdateCellsCommand.js';
+import { Logger } from './engine/utils/Logger.js';
 
 class Spreadsheet {
   constructor(containerId) {
     this.container = document.getElementById(containerId);
     if (!this.container) {
-      console.error(`Container with id "${containerId}" not found.`);
+      Logger.error(
+        'Spreadsheet',
+        `Container with id "${containerId}" not found.`
+      );
       return;
     }
 
@@ -94,13 +98,13 @@ class Spreadsheet {
 
         // This message signals the initial load is done
         case 'loadComplete':
-          console.log('Worker has finished loading file.');
+          Logger.log('Spreadsheet', 'Worker has finished loading file.');
           // You could show the grid here
           break;
 
         // Handle any errors from the worker
         case 'error':
-          console.error('Formula Worker Error:', payload.message);
+          Logger.error('Spreadsheet', 'Formula Worker Error:', payload.message);
           // You could show an error to the user
           break;
       }
@@ -177,7 +181,10 @@ class Spreadsheet {
         payload: { fileCellData: fileData.cells || {} },
       });
     } else {
-      console.error('Formula worker not ready, cannot load file.');
+      Logger.error(
+        'Spreadsheet',
+        'Formula worker not ready, cannot load file.'
+      );
       // You could implement a fallback to the old logic here if needed
     }
 
@@ -443,13 +450,13 @@ class Spreadsheet {
           // Cmd+Shift+Z = Redo (Mac style)
           const didRedo = this.historyManager.redo();
           if (didRedo) {
-            console.log('↷ Redo performed');
+            Logger.log('History', '↷ Redo performed');
           }
         } else {
           // Cmd+Z = Undo
           const didUndo = this.historyManager.undo();
           if (didUndo) {
-            console.log('↶ Undo performed');
+            Logger.log('History', '↶ Undo performed');
           }
         }
         return;
