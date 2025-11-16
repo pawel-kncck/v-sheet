@@ -436,6 +436,35 @@ class Spreadsheet {
       const isShift = e.shiftKey;
       const isCmd = e.metaKey || e.ctrlKey;
 
+      // ADD UNDO/REDO HANDLERS HERE (before the arrow key handling)
+      if (isCmd && key === 'z') {
+        e.preventDefault();
+        if (isShift) {
+          // Cmd+Shift+Z = Redo (Mac style)
+          const didRedo = this.historyManager.redo();
+          if (didRedo) {
+            console.log('↷ Redo performed');
+          }
+        } else {
+          // Cmd+Z = Undo
+          const didUndo = this.historyManager.undo();
+          if (didUndo) {
+            console.log('↶ Undo performed');
+          }
+        }
+        return;
+      }
+
+      if (isCmd && key === 'y') {
+        // Ctrl+Y = Redo (Windows style)
+        e.preventDefault();
+        const didRedo = this.historyManager.redo();
+        if (didRedo) {
+          console.log('↷ Redo performed');
+        }
+        return;
+      }
+
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
         e.preventDefault();
         if (isCmd && isShift) {
@@ -511,33 +540,6 @@ class Spreadsheet {
           this._handleArrowKey(key, false);
           this.cellGridContainer.focus();
         }
-      }
-      if (isCmd && key === 'z') {
-        e.preventDefault();
-        if (isShift) {
-          // Cmd+Shift+Z or Ctrl+Shift+Z = Redo (Mac style)
-          const didRedo = this.historyManager.redo();
-          if (didRedo) {
-            console.log('↷ Redo performed');
-          }
-        } else {
-          // Cmd+Z or Ctrl+Z = Undo
-          const didUndo = this.historyManager.undo();
-          if (didUndo) {
-            console.log('↶ Undo performed');
-          }
-        }
-        return;
-      }
-
-      if (isCmd && key === 'y') {
-        // Ctrl+Y = Redo (Windows style)
-        e.preventDefault();
-        const didRedo = this.historyManager.redo();
-        if (didRedo) {
-          console.log('↷ Redo performed');
-        }
-        return;
       }
     });
 
