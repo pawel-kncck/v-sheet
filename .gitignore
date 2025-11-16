@@ -33,3 +33,4 @@ Thumbs.db
 # Logs
 *.log
 test-history-manual.html
+node_modules/
