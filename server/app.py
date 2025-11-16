@@ -36,13 +36,13 @@ class FileManager:
                 print(f"Error reading file {file_path}: {e}")
                 continue
         return sorted(files, key=lambda x: x['modified'], reverse=True)
-    
+
     @staticmethod
     def create_file(name="Untitled Spreadsheet"):
         """Create a new spreadsheet file"""
         file_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat() + 'Z'
-        
+
         file_data = {
             'id': file_id,
             'name': name,
@@ -58,13 +58,13 @@ class FileManager:
                 }
             }
         }
-        
+
         file_path = FILES_DIR / f'{file_id}.json'
         with open(file_path, 'w') as f:
             json.dump(file_data, f, indent=2)
-        
+
         return file_data
-    
+
     @staticmethod
     def update_recent_file(file_id):
         """Update the most recently accessed file"""
@@ -74,13 +74,13 @@ class FileManager:
         }
         with open(METADATA_FILE, 'w') as f:
             json.dump(metadata, f, indent=2)
-    
+
     @staticmethod
     def get_recent_file_id():
         """Get the most recently accessed file ID"""
         if not METADATA_FILE.exists():
             return None
-        
+
         try:
             with open(METADATA_FILE, 'r') as f:
                 metadata = json.load(f)
@@ -121,10 +121,10 @@ def get_file(file_id):
         file_path = FILES_DIR / f'{file_id}.json'
         if not file_path.exists():
             return jsonify({'error': 'File not found'}), 404
-        
+
         with open(file_path, 'r') as f:
             file_data = json.load(f)
-        
+
         FileManager.update_recent_file(file_id)
         return jsonify(file_data), 200
     except json.JSONDecodeError:
@@ -140,25 +140,25 @@ def update_file(file_id):
         file_path = FILES_DIR / f'{file_id}.json'
         if not file_path.exists():
             return jsonify({'error': 'File not found'}), 404
-        
+
         # Load existing file
         with open(file_path, 'r') as f:
             file_data = json.load(f)
-        
+
         # Update with new data
         update_data = request.json
         file_data['modified'] = datetime.utcnow().isoformat() + 'Z'
-        
+
         # Update specific fields
         if 'name' in update_data:
             file_data['name'] = update_data['name']
         if 'data' in update_data:
             file_data['data'] = update_data['data']
-        
+
         # Save back to file
         with open(file_path, 'w') as f:
             json.dump(file_data, f, indent=2)
-        
+
         return jsonify({'success': True, 'modified': file_data['modified']}), 200
     except json.JSONDecodeError:
         return jsonify({'error': 'Invalid JSON in request'}), 400
@@ -173,13 +173,13 @@ def delete_file(file_id):
         file_path = FILES_DIR / f'{file_id}.json'
         if not file_path.exists():
             return jsonify({'error': 'File not found'}), 404
-        
+
         # Check if this is the recent file
         recent_file_id = FileManager.get_recent_file_id()
-        
+
         # Delete the file
         file_path.unlink()
-        
+
         # If we deleted the recent file, clear the metadata or set a new recent file
         if recent_file_id == file_id:
             remaining_files = FileManager.get_all_files()
@@ -190,7 +190,7 @@ def delete_file(file_id):
                 # No files left, clear the metadata
                 if METADATA_FILE.exists():
                     METADATA_FILE.unlink()
-        
+
         return jsonify({'success': True}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -201,16 +201,16 @@ def get_recent_file():
     """Get the most recently accessed file ID"""
     try:
         recent_file_id = FileManager.get_recent_file_id()
-        
+
         if recent_file_id:
             # Verify the file still exists
             file_path = FILES_DIR / f'{recent_file_id}.json'
             if file_path.exists():
                 return jsonify({'recentFileId': recent_file_id}), 200
-        
+
         # No recent file or it doesn't exist, check for any existing files
         existing_files = FileManager.get_all_files()
-        
+
         if existing_files:
             # Use the most recently modified file
             recent_file_id = existing_files[0]['id']
@@ -221,7 +221,7 @@ def get_recent_file():
             file_data = FileManager.create_file("My First Spreadsheet")
             FileManager.update_recent_file(file_data['id'])
             return jsonify({'recentFileId': file_data['id']}), 200
-            
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -249,6 +249,12 @@ def serve_js(path):
 def health_check():
     """Health check endpoint"""
     return jsonify({'status': 'healthy', 'service': 'v-sheet-backend'}), 200
+
+
+@app.route('/test-history-manual.html')
+def serve_test():
+    """Serve the test file"""
+    return send_from_directory('..', 'test-history-manual.html')
 
 
 if __name__ == '__main__':
