@@ -1,3 +1,7 @@
+// History Management
+import { HistoryManager } from './history/HistoryManager.js';
+import { UpdateCellsCommand } from './history/commands/UpdateCellsCommand.js';
+
 class Spreadsheet {
   constructor(containerId) {
     this.container = document.getElementById(containerId);
@@ -43,6 +47,9 @@ class Spreadsheet {
 
     // --- Editing Intent State ---
     this.isEditingIntentionally = false;
+
+    // Initialize history management
+    this.historyManager = new HistoryManager(100);
 
     // --- Integration with FileManager and FormulaBar ---
     this.fileManager = null;
@@ -149,6 +156,11 @@ class Spreadsheet {
   loadFromFile(fileData) {
     if (!fileData) return;
 
+    // Clear history when loading new file
+    if (this.historyManager) {
+      this.historyManager.clear();
+    }
+
     // 1. Clear existing data (DOM and state)
     this.clear();
 
@@ -224,6 +236,10 @@ class Spreadsheet {
     if (firstCell) {
       this._setActiveCell(firstCell);
       this._handleCellSelection(firstCell, false, false);
+    }
+    // Clear history
+    if (this.historyManager) {
+      this.historyManager.clear();
     }
   }
 
@@ -473,6 +489,7 @@ class Spreadsheet {
     // Listeners for the cell editor input
     this.cellEditor.addEventListener('keydown', (e) => {
       const key = e.key;
+      const isCmd = e.metaKey || e.ctrlKey;
 
       if (key === 'Enter') {
         e.preventDefault();
@@ -494,6 +511,33 @@ class Spreadsheet {
           this._handleArrowKey(key, false);
           this.cellGridContainer.focus();
         }
+      }
+      if (isCmd && key === 'z') {
+        e.preventDefault();
+        if (isShift) {
+          // Cmd+Shift+Z or Ctrl+Shift+Z = Redo (Mac style)
+          const didRedo = this.historyManager.redo();
+          if (didRedo) {
+            console.log('↷ Redo performed');
+          }
+        } else {
+          // Cmd+Z or Ctrl+Z = Undo
+          const didUndo = this.historyManager.undo();
+          if (didUndo) {
+            console.log('↶ Undo performed');
+          }
+        }
+        return;
+      }
+
+      if (isCmd && key === 'y') {
+        // Ctrl+Y = Redo (Windows style)
+        e.preventDefault();
+        const didRedo = this.historyManager.redo();
+        if (didRedo) {
+          console.log('↷ Redo performed');
+        }
+        return;
       }
     });
 
@@ -1264,7 +1308,13 @@ class Spreadsheet {
     this.cellGridContainer.focus();
   }
 
+  /**
+   * Clears all selected cells using the command pattern
+   */
   _clearSelectedCells() {
+    // Build array of all cells to clear
+    const cellUpdates = [];
+
     this.selections.forEach((selection) => {
       const { start, end } = selection;
       const minCol = Math.min(start.col, end.col);
@@ -1278,72 +1328,67 @@ class Spreadsheet {
           if (!cell) continue;
 
           const cellId = cell.dataset.id;
+          const oldValue = this.fileManager.getRawCellValue(cellId);
 
-          // --- NEW LOGIC ---
-
-          // 1. Tell the fileManager to clear the cell's raw data.
-          //    (Its logic already handles deleting the key for empty values)
-          if (this.fileManager) {
-            this.fileManager.updateCellData(cellId, '');
-          }
-
-          // 2. Tell the worker to clear the cell, which will
-          //    trigger the correct recalculation of dependents.
-          if (this.formulaWorker) {
-            this.formulaWorker.postMessage({
-              type: 'clearCell',
-              payload: { cellId },
+          // Only add to updates if cell has content
+          if (oldValue) {
+            cellUpdates.push({
+              cellId,
+              newValue: '',
+              oldValue,
             });
           }
-
-          // After telling the worker to clear the cell, also clear our cache
-          delete this.cellData[cellId];
         }
       }
     });
+
+    // Only execute command if there's something to clear
+    if (cellUpdates.length > 0) {
+      const command = new UpdateCellsCommand({
+        cellUpdates,
+        fileManager: this.fileManager,
+        formulaWorker: this.formulaWorker,
+      });
+      this.historyManager.execute(command);
+    }
   }
 
   // --- Modified Helper Methods with FileManager integration ---
 
+  /**
+   * Updates a cell's value using the command pattern
+   * This method now creates a command instead of directly modifying state
+   */
   _updateCell(cell, value) {
     if (!cell) return;
 
     const cellId = cell.dataset.id;
 
-    // --- NEW LOGIC ---
+    // CRITICAL: Capture OLD state BEFORE creating command
+    // The fileManager is the source of truth for raw values
+    const oldValue = this.fileManager.getRawCellValue(cellId);
 
-    // 1. Save the raw value/formula to the file manager.
-    // This is critical. The file manager stores the "truth".
-    if (this.fileManager) {
-      this.fileManager.updateCellData(cellId, value);
-    }
+    // Create and execute command
+    const command = new UpdateCellsCommand({
+      cellUpdates: [
+        {
+          cellId,
+          newValue: value,
+          oldValue,
+        },
+      ],
+      fileManager: this.fileManager,
+      formulaWorker: this.formulaWorker,
+    });
 
-    // 2. Send the new value/formula to the worker for processing.
-    if (this.formulaWorker) {
-      const stringValue = String(value || '');
+    this.historyManager.execute(command);
 
-      if (stringValue.startsWith('=')) {
-        // This is a formula. Tell the worker to parse and evaluate.
-        this.formulaWorker.postMessage({
-          type: 'setFormula',
-          payload: { cellId, formulaString: stringValue },
-        });
-      } else {
-        // This is a raw value. Tell the worker to set it.
-        this.formulaWorker.postMessage({
-          type: 'setCellValue',
-          payload: { cellId, value: value },
-        });
-      }
-    }
-
-    // 3. --- DELETED LOGIC ---
-    // We NO LONGER set `this.cellData` or `cell.textContent` here.
-    // The worker will send back an 'updates' message, and our
-    // `_applyUpdates` method will set the textContent.
-
-    // We also NO LONGER update the formula bar here.
-    // That will be handled in the next step (cell selection).
+    // IMPORTANT: Do NOT manually update anything here!
+    // The command handles:
+    // 1. fileManager.updateCellData() - updates source of truth
+    // 2. worker.postMessage() - triggers calculation
+    // 3. Worker sends 'updates' message back
+    // 4. Our _applyUpdates() method updates the DOM
   }
 
   _getCellCoords(cell) {
@@ -1404,14 +1449,25 @@ class Spreadsheet {
     this._copyToSystemClipboard(cellsToCopy);
   }
 
+  /**
+   * Handles paste operation using the command pattern
+   */
   _handlePaste() {
-    if (!this.clipboard.data) return;
+    if (!this.clipboard.data) {
+      console.warn('Nothing to paste - clipboard is empty');
+      return;
+    }
 
-    // Get paste target
     const targetCell = this.activeCell;
-    const targetCoords = this._getCellCoords(targetCell);
+    if (!targetCell) {
+      console.warn('No active cell to paste into');
+      return;
+    }
 
-    // For now, just paste values (no formula adjustment)
+    const targetCoords = this._getCellCoords(targetCell);
+    const cellUpdates = [];
+
+    // Build updates array
     this.clipboard.data.forEach((cellData) => {
       const newRow = targetCoords.row + cellData.relativePos.row;
       const newCol = targetCoords.col + cellData.relativePos.col;
@@ -1423,21 +1479,37 @@ class Spreadsheet {
         newRow > 0 &&
         newCol >= 0
       ) {
-        const targetCellElement = this._getCellElement({
-          row: newRow,
-          col: newCol,
+        const targetCellId = this._buildCellId(newRow, newCol);
+        const oldValue = this.fileManager.getRawCellValue(targetCellId);
+
+        cellUpdates.push({
+          cellId: targetCellId,
+          newValue: cellData.value,
+          oldValue: oldValue,
         });
-        if (targetCellElement) {
-          // For Step 1: Just paste the value as-is
-          // This will work fine for plain values
-          // Formulas will be pasted as text (won't calculate yet)
-          this._updateCell(targetCellElement, cellData.value);
-        }
       }
     });
 
-    // Clear copy indicators after paste
+    // Execute as single command
+    if (cellUpdates.length > 0) {
+      const command = new UpdateCellsCommand({
+        cellUpdates,
+        fileManager: this.fileManager,
+        formulaWorker: this.formulaWorker,
+      });
+      this.historyManager.execute(command);
+    }
+
+    // Clear copy indicators
     this._clearCopyIndicators();
+  }
+
+  /**
+   * Helper method to build cell ID from coordinates
+   */
+  _buildCellId(row, col) {
+    const colLetter = String.fromCharCode(65 + col);
+    return `${colLetter}${row}`;
   }
 
   _getSelectedCells() {
@@ -1483,3 +1555,5 @@ class Spreadsheet {
     // Placeholder - this function has to be written later
   }
 }
+
+export { Spreadsheet };

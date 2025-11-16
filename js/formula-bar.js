@@ -513,7 +513,10 @@ class FormulaBar {
   }
 }
 
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = FormulaBar;
-}
+// OLD (remove this):
+// if (typeof module !== 'undefined' && module.exports) {
+//   module.exports = FormulaBar;
+// }
+
+// NEW (use this instead):
+export { FormulaBar };

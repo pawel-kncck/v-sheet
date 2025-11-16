@@ -524,7 +524,10 @@ class FileManager {
   }
 }
 
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = FileManager;
-}
+// OLD (remove this):
+// if (typeof module !== 'undefined' && module.exports) {
+//   module.exports = FileManager;
+// }
+
+// NEW (use this instead):
+export { FileManager };

@@ -101,10 +101,12 @@
       <div id="cell-grid"></div>
     </div>
 
-    <script src="js/file-manager.js"></script>
-    <script src="js/formula-bar.js"></script>
-    <script src="js/spreadsheet.js"></script>
-    <script>
+    <script type="module">
+      // Import classes as ES6 modules
+      import { FileManager } from './js/file-manager.js';
+      import { FormulaBar } from './js/formula-bar.js';
+      import { Spreadsheet } from './js/spreadsheet.js';
+
       let fileManager;
       let formulaBar;
       let spreadsheet;
@@ -149,7 +151,7 @@
             spreadsheet = new Spreadsheet(
               'spreadsheet-container',
               formulaWorker
-            ); // <<< 4. Pass worker
+            );
             fileManager = new FileManager();
 
             // Initialize file manager first
@@ -164,7 +166,7 @@
               spreadsheet.setFormulaBar(formulaBar);
 
               // Tell the spreadsheet to set up its worker listeners
-              spreadsheet.setFormulaWorker(formulaWorker); // <<< 5. Set up worker in spreadsheet
+              spreadsheet.setFormulaWorker(formulaWorker);
 
               // Load the spreadsheet data from the current file
               const fileData = fileManager.getCurrentFileData();
