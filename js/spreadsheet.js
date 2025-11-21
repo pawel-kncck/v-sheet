@@ -141,6 +141,7 @@ export class Spreadsheet {
     
     // 1. Cell Selection (Click / Drag)
     this.renderer.on('cellMouseDown', ({ cellElement, event }) => {
+      this.renderer.cellGridContainer.focus()
       if (this.editor.isEditing) return; // Don't select if editing
       
       const coords = this._getCellCoordsFromElement(cellElement);
@@ -175,6 +176,7 @@ export class Spreadsheet {
 
     // 3. Resizing
     this.renderer.on('headerMouseDown', ({ type, event }) => {
+      this.renderer.cellGridContainer.focus()
       const target = event.target.closest('.header-cell');
       const cursor = this.resizer.getCursorForHeader(target, event);
       

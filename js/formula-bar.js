@@ -126,6 +126,18 @@ class FormulaBar {
     this.fileManager.onError = (error) => {
       this.showError(error.message);
     };
+
+    // --- INITIALIZATION SYNC ---
+    // 1. Hydrate file list (from previous fix)
+    if (this.fileManager.files && this.fileManager.files.length > 0) {
+      this.updateFileList(this.fileManager.files);
+    }
+    
+    // 2. Hydrate current file status (Fixes "Loading..." sticking on start)
+    if (this.fileManager.currentFile) {
+      this.updateCurrentFile(this.fileManager.currentFile);
+      this.updateSaveStatus('saved'); // Assume saved on initial load
+    }
   }
 
   /**
@@ -175,7 +187,8 @@ class FormulaBar {
   updateFileList(files) {
     this.elements.fileList.innerHTML = '';
 
-    const currentFileId = this.fileManager.getCurrentFileId();
+    // Note: We do NOT capture 'currentFileId' here anymore to avoid stale closures.
+    // We will check it dynamically inside the click handler.
 
     files.forEach((file) => {
       const fileItem = document.createElement('div');
@@ -183,8 +196,8 @@ class FormulaBar {
       fileItem.dataset.fileId = file.id;
       fileItem.dataset.fileName = file.name.toLowerCase();
 
-      // Mark active file
-      if (file.id === currentFileId) {
+      // Mark active file visually (we can still use the current ID for rendering)
+      if (file.id === this.fileManager.getCurrentFileId()) {
         fileItem.classList.add('active');
       }
 
@@ -203,16 +216,27 @@ class FormulaBar {
 
       // Click handler to load file
       fileItem.addEventListener('click', async () => {
-        if (file.id !== currentFileId) {
-          await this.fileManager.loadFile(file.id);
-          // Load the spreadsheet data
-          if (this.spreadsheet && this.spreadsheet.loadFromFile) {
-            this.spreadsheet.loadFromFile(
-              this.fileManager.getCurrentFileData()
-            );
+        try {
+          // FIX 1: Get the FRESH current ID, not a stale closure variable
+          const currentId = this.fileManager.getCurrentFileId();
+
+          if (file.id !== currentId) {
+            await this.fileManager.loadFile(file.id);
+            
+            // Load the spreadsheet data
+            if (this.spreadsheet && this.spreadsheet.loadFromFile) {
+              this.spreadsheet.loadFromFile(
+                this.fileManager.getCurrentFileData()
+              );
+            }
           }
+        } catch (error) {
+          console.error("Failed to switch file:", error);
+          this.showError("Failed to load file");
+        } finally {
+          // FIX 2: Always close the dropdown, even if loading fails
+          this.closeFileDropdown();
         }
-        this.closeFileDropdown();
       });
 
       this.elements.fileList.appendChild(fileItem);
