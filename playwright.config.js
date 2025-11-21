@@ -21,7 +21,7 @@ export default defineConfig({
   // It tells Playwright how to start your backend server.
   webServer: {
     // Command to start the server
-    command: 'python server/app.py', //
+    command: './venv/bin/python server/app.py', //
 
     // URL to poll to check if the server is ready
     // We use the /health endpoint defined in app.py

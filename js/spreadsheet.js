@@ -1,1568 +1,465 @@
-// History Management
+// Core Dependencies
 import { HistoryManager } from './history/HistoryManager.js';
 import { UpdateCellsCommand } from './history/commands/UpdateCellsCommand.js';
 import { Logger } from './engine/utils/Logger.js';
+import { CellHelpers } from './engine/utils/CellHelpers.js';
 
-class Spreadsheet {
-  constructor(containerId) {
-    this.container = document.getElementById(containerId);
-    if (!this.container) {
-      Logger.error(
-        'Spreadsheet',
-        `Container with id "${containerId}" not found.`
-      );
-      return;
+// UI Modules
+import { GridRenderer } from './ui/GridRenderer.js';
+import { SelectionManager } from './ui/SelectionManager.js';
+import { GridResizer } from './ui/GridResizer.js';
+import { EditorManager } from './ui/EditorManager.js';
+import { ClipboardManager } from './ui/ClipboardManager.js';
+
+export class Spreadsheet {
+  constructor(containerId, formulaWorker) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+      Logger.error('Spreadsheet', `Container "${containerId}" not found.`);
+      throw new Error(`Container "${containerId}" not found.`);
     }
 
-    this.cellEditor = document.getElementById('cell-editor');
-    this.cellData = {};
-    this.isEditing = false;
-    this.editingCell = null;
+    // Configuration
+    this.config = {
+      rows: 100,
+      cols: 26,
+      defaultColWidth: 94,
+      defaultRowHeight: 20
+    };
 
-    this.columnHeadersContainer = this.container.querySelector(
-      '#column-headers'
-    );
-    this.rowHeadersContainer = this.container.querySelector('#row-headers');
-    this.cellGridContainer = this.container.querySelector('#cell-grid');
+    // --- 1. Initialize Modules ---
+    
+    // Visual Layer
+    this.renderer = new GridRenderer(container, this.config);
+    
+    // Logic Layer
+    this.selectionManager = new SelectionManager(this.renderer, this.config);
+    this.resizer = new GridResizer();
+    this.editor = new EditorManager(this.renderer);
+    
+    // Data Layer
+    // We pass a getter so ClipboardManager can lazy-load values
+    this.clipboardManager = new ClipboardManager(this.renderer, (cellId) => {
+      return this.fileManager ? this.fileManager.getRawCellValue(cellId) : '';
+    });
 
-    this.ROWS = 100;
-    this.COLS = 26;
-    this.DEFAULT_COL_WIDTH = 94;
-    this.DEFAULT_ROW_HEIGHT = 20;
-    this.MIN_COL_WIDTH = 5;
-    this.MIN_ROW_HEIGHT = 5;
-
-    // --- Advanced Selection State ---
-    this.selections = [];
-    this.selectionAnchor = null;
-    this.activeCell = null;
-    this.isMouseDown = false;
-
-    // --- Resizing State ---
-    this.columnWidths = [];
-    this.rowHeights = [];
-    this.isResizing = false;
-    this.resizeInfo = {};
-
-    // --- Drag-to-move State ---
-    this.isDraggingCells = false;
-    this.dragInfo = {};
-    this.ghostElement = null;
-
-    // --- Editing Intent State ---
-    this.isEditingIntentionally = false;
-
-    // Initialize history management
+    // History
     this.historyManager = new HistoryManager(100);
 
-    // --- Integration with FileManager and FormulaBar ---
+    // External Dependencies (injected via setters later)
     this.fileManager = null;
     this.formulaBar = null;
-    this.formulaWorker = null;
+    this.formulaWorker = formulaWorker;
 
-    this._createGrid();
-    this._syncScroll();
-    this._initEventListeners();
-
+    // --- 2. Setup ---
+    this.renderer.createGrid();
+    this._setupEventWiring();
+    this._setupWorkerListeners();
+    
     // Set initial selection
-    const firstCell = this.cellGridContainer.querySelector("[data-id='A1']");
-    this._setActiveCell(firstCell);
-    this._handleCellSelection(firstCell, false, false);
+    this.selectionManager.selectCell({ row: 1, col: 0 }); // A1
 
-    // In spreadsheet.js constructor
-    this.clipboard = {
-      data: null,
-      copiedCells: new Set(), // Track which cells have been copied for visual feedback
-      timestamp: null,
-    };
+    Logger.log('Spreadsheet', 'Coordinator initialized');
   }
 
-  // --- New Integration Methods ---
+  // ==========================================================================
+  // PUBLIC API
+  // ==========================================================================
 
-  /**
-   * Set the FormulaWorker instance and set up listeners
-   */
-  setFormulaWorker(worker) {
-    this.formulaWorker = worker;
-
-    // --- 2. This is the "Receive" flow ---
-    // Listen for all messages from the worker
-    this.formulaWorker.onmessage = (event) => {
-      const { type, payload } = event.data;
-
-      switch (type) {
-        // This message contains all calculated values
-        case 'updates':
-          this._applyUpdates(payload.updates);
-          break;
-
-        // This message signals the initial load is done
-        case 'loadComplete':
-          Logger.log('Spreadsheet', 'Worker has finished loading file.');
-          // You could show the grid here
-          break;
-
-        // Handle any errors from the worker
-        case 'error':
-          Logger.error('Spreadsheet', 'Formula Worker Error:', payload.message);
-          // You could show an error to the user
-          break;
-      }
-    };
-  }
-
-  /**
-   * Helper method to apply updates from the worker to the DOM
-   * @param {Object} updates - e.g., { "A1": 10, "B2": "Hello" }
-   * @private
-   */
-  _applyUpdates(updates) {
-    for (const [cellId, value] of Object.entries(updates)) {
-      const cell = this.cellGridContainer.querySelector(
-        `[data-id='${cellId}']`
-      );
-      if (cell) {
-        // Update the display text
-        cell.textContent = value === undefined ? '' : value;
-
-        // ALSO update our internal cellData cache for navigation functions
-        if (value === undefined || value === '' || value === null) {
-          delete this.cellData[cellId];
-        } else {
-          this.cellData[cellId] = value;
-        }
-      }
-    }
-  }
-
-  /**
-   * Set the FileManager instance for integration
-   */
   setFileManager(fileManager) {
     this.fileManager = fileManager;
   }
 
-  /**
-   * Set the FormulaBar instance for integration
-   */
   setFormulaBar(formulaBar) {
     this.formulaBar = formulaBar;
-    // Update formula bar with initial cell
-    if (this.formulaBar) {
-      this.formulaBar.updateCellReference('A1');
-      this.formulaBar.updateFormulaInput('');
+    // Sync initial state
+    if (this.selectionManager.activeCell) {
+      this._updateFormulaBar();
     }
   }
 
   /**
-   * Load spreadsheet data from file
+   * Loads data from a file object.
+   * Delegates to modules to reset their state.
    */
   loadFromFile(fileData) {
     if (!fileData) return;
 
-    // Clear history when loading new file
-    if (this.historyManager) {
-      this.historyManager.clear();
+    // 1. Reset History
+    this.historyManager.clear();
+
+    // 2. Reset Modules
+    this.selectionManager.clear();
+    // We intentionally don't clear clipboard on file load (allows copy-paste between files)
+
+    // 3. Apply Structure (Widths/Heights)
+    if (fileData.columnWidths) {
+      this.renderer.setColumnWidths(fileData.columnWidths);
+    }
+    if (fileData.rowHeights) {
+      this.renderer.setRowHeights(fileData.rowHeights);
     }
 
-    // 1. Clear existing data (DOM and state)
-    this.clear();
-
-    // Clear cellData cache as well
-    this.cellData = {};
-
-    // 2. --- NEW LOGIC ---
-    // Send the raw cell data to the worker for processing.
-    // The worker will parse, calculate, and send back an 'updates'
-    // message, which our listener in `setFormulaWorker` will catch.
+    // 4. Load Data into Worker
+    // The worker will calculate values and send back an 'updates' message
+    // which triggers renderer.updateCellContent()
     if (this.formulaWorker) {
       this.formulaWorker.postMessage({
         type: 'load',
         payload: { fileCellData: fileData.cells || {} },
       });
-    } else {
-      Logger.error(
-        'Spreadsheet',
-        'Formula worker not ready, cannot load file.'
-      );
-      // You could implement a fallback to the old logic here if needed
     }
 
-    // 3. --- KEEP THIS LOGIC ---
-    // Column widths, row heights, and metadata are UI-only
-    // and can be applied immediately.
-
-    // Load column widths
-    if (fileData.columnWidths && fileData.columnWidths.length === this.COLS) {
-      this.columnWidths = [...fileData.columnWidths];
-      this._applyGridStyles();
-    }
-
-    // Load row heights
-    if (fileData.rowHeights && fileData.rowHeights.length === this.ROWS) {
-      this.rowHeights = [...fileData.rowHeights];
-      this._applyGridStyles();
-    }
-
-    // Load metadata
-    if (fileData.metadata) {
-      // Restore last active cell
-      if (fileData.metadata.lastActiveCell) {
-        this.selectCell(fileData.metadata.lastActiveCell);
-      }
-
-      // Restore selections if needed
-      if (
-        fileData.metadata.selections &&
-        fileData.metadata.selections.length > 0
-      ) {
-        // Optionally restore previous selections
+    // 5. Restore Metadata (Selection)
+    if (fileData.metadata?.lastActiveCell) {
+      const coords = this._cellIdToCoords(fileData.metadata.lastActiveCell);
+      if (coords) {
+        this.selectionManager.selectCell(coords);
       }
     }
   }
 
   /**
-   * Clear all spreadsheet data
+   * Clears the spreadsheet (e.g. for "New File")
    */
   clear() {
-    // Clear cell data
-    this.cellData = {};
-
-    // Clear visual cells
-    this.cellGridContainer.querySelectorAll('.cell').forEach((cell) => {
-      cell.textContent = '';
-    });
-
-    // Reset column widths and row heights
-    this._initColumnWidths();
-    this._initRowHeights();
-    this._applyGridStyles();
-
-    // Reset selection to A1
-    const firstCell = this.cellGridContainer.querySelector("[data-id='A1']");
-    if (firstCell) {
-      this._setActiveCell(firstCell);
-      this._handleCellSelection(firstCell, false, false);
-    }
-    // Clear history
-    if (this.historyManager) {
-      this.historyManager.clear();
-    }
+    // Clear DOM
+    this.renderer.createGrid(); // Re-creates empty grid
+    
+    // Clear State
+    this.selectionManager.clear();
+    this.historyManager.clear();
+    this.selectionManager.selectCell({ row: 1, col: 0 }); // Reset to A1
   }
 
-  /**
-   * Get cell value by ID
-   */
-  getCellValue(cellId) {
-    return this.cellData[cellId] || '';
-  }
+  // ==========================================================================
+  // EVENT WIRING (The "Glue")
+  // ==========================================================================
 
-  /**
-   * Set cell value by ID
-   */
-  setCellValue(cellId, value) {
-    const cell = this.cellGridContainer.querySelector(`[data-id='${cellId}']`);
-    if (cell) {
-      this._updateCell(cell, value);
-    }
-  }
-
-  /**
-   * Select a cell by ID
-   */
-  selectCell(cellId) {
-    const cell = this.cellGridContainer.querySelector(`[data-id='${cellId}']`);
-    if (cell) {
-      this._setActiveCell(cell);
-      this._handleCellSelection(cell, false, false);
-      this._scrollCellIntoView(cell);
-    }
-  }
-
-  // --- Modified Grid creation methods ---
-
-  _createGrid() {
-    this._initColumnWidths();
-    this._initRowHeights();
-    this._createColumnHeaders();
-    this._createRowHeaders();
-    this._createCells();
-    this._applyGridStyles();
-  }
-
-  _initColumnWidths() {
-    for (let i = 0; i < this.COLS; i++) {
-      this.columnWidths[i] = this.DEFAULT_COL_WIDTH;
-    }
-  }
-
-  _initRowHeights() {
-    for (let i = 0; i < this.ROWS; i++) {
-      this.rowHeights[i] = this.DEFAULT_ROW_HEIGHT;
-    }
-  }
-
-  _applyGridStyles() {
-    const colTemplate = this.columnWidths.map((w) => `${w}px`).join(' ');
-    const rowTemplate = this.rowHeights.map((h) => `${h}px`).join(' ');
-
-    this.columnHeadersContainer.style.gridTemplateColumns = colTemplate;
-    this.cellGridContainer.style.gridTemplateColumns = colTemplate;
-
-    this.rowHeadersContainer.style.gridTemplateRows = rowTemplate;
-    this.cellGridContainer.style.gridTemplateRows = rowTemplate;
-  }
-
-  _createColumnHeaders() {
-    for (let i = 0; i < this.COLS; i++) {
-      const header = document.createElement('div');
-      header.className = 'header-cell';
-      header.dataset.col = i;
-      header.textContent = String.fromCharCode(65 + i);
-      this.columnHeadersContainer.appendChild(header);
-    }
-  }
-
-  _createRowHeaders() {
-    for (let i = 1; i <= this.ROWS; i++) {
-      const header = document.createElement('div');
-      header.className = 'header-cell';
-      header.dataset.row = i;
-      header.textContent = i;
-      this.rowHeadersContainer.appendChild(header);
-    }
-  }
-
-  _createCells() {
-    const fragment = document.createDocumentFragment();
-    for (let row = 1; row <= this.ROWS; row++) {
-      for (let col = 0; col < this.COLS; col++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-        const colName = String.fromCharCode(65 + col);
-        cell.dataset.id = `${colName}${row}`;
-        cell.dataset.col = col;
-        cell.dataset.row = row;
-        fragment.appendChild(cell);
-      }
-    }
-    this.cellGridContainer.appendChild(fragment);
-  }
-
-  _syncScroll() {
-    this.cellGridContainer.addEventListener('scroll', () => {
-      this.columnHeadersContainer.scrollLeft = this.cellGridContainer.scrollLeft;
-      this.rowHeadersContainer.scrollTop = this.cellGridContainer.scrollTop;
-    });
-  }
-
-  // --- Modified Event Handling with Integration ---
-
-  _initEventListeners() {
-    this.cellGridContainer.tabIndex = 0;
-
-    // Mouse listeners for cell selection
-    this.cellGridContainer.addEventListener('mousedown', (e) => {
-      if (this.isEditing) return;
-
-      if (this.cellGridContainer.style.cursor === 'grab') {
-        this._initDrag(e);
-        return;
+  _setupEventWiring() {
+    // --- GridRenderer Events ---
+    
+    // 1. Cell Selection (Click / Drag)
+    this.renderer.on('cellMouseDown', ({ cellElement, event }) => {
+      if (this.editor.isEditing) return; // Don't select if editing
+      
+      const coords = this._getCellCoordsFromElement(cellElement);
+      
+      // Right click? Just select single cell if not in current selection
+      if (event.button === 2) {
+        // Context menu logic would go here
+        return; 
       }
 
-      if (e.target.classList.contains('cell')) {
-        this.isMouseDown = true;
-        this._handleCellSelection(e.target, e.shiftKey, e.metaKey || e.ctrlKey);
-      }
+      this.selectionManager.selectCell(coords, event.shiftKey, event.metaKey || event.ctrlKey);
     });
 
-    this.cellGridContainer.addEventListener(
-      'mousemove',
-      this._handleGridMouseMove.bind(this)
-    );
+    this.renderer.on('cellMouseOver', ({ cellElement, event }) => {
+      if (this.editor.isEditing) return;
+      if (event.buttons !== 1) return; // Only if left mouse button is held
 
-    this.cellGridContainer.addEventListener('mouseover', (e) => {
-      if (this.isMouseDown && e.target.classList.contains('cell')) {
-        this._handleCellSelection(e.target, true, false);
-      }
+      const coords = this._getCellCoordsFromElement(cellElement);
+      this.selectionManager.selectCell(coords, true, false); // Always extend on drag
     });
 
-    // Listeners for header mouse move (to change cursor)
-    this.columnHeadersContainer.addEventListener(
-      'mousemove',
-      this._handleHeaderMouseMove.bind(this)
-    );
-    this.rowHeadersContainer.addEventListener(
-      'mousemove',
-      this._handleHeaderMouseMove.bind(this)
-    );
-
-    // Listeners for header mouse down (to start selection or resize)
-    this.columnHeadersContainer.addEventListener('mousedown', (e) => {
-      if (e.currentTarget.style.cursor === 'col-resize') {
-        this._initResize(e, 'col');
-      } else if (e.target.classList.contains('header-cell')) {
-        this.isMouseDown = true;
-        this._handleHeaderSelection(
-          e.target.dataset.col,
-          'col',
-          e.shiftKey,
-          e.metaKey || e.ctrlKey
-        );
-      }
-    });
-    this.rowHeadersContainer.addEventListener('mousedown', (e) => {
-      if (e.currentTarget.style.cursor === 'row-resize') {
-        this._initResize(e, 'row');
-      } else if (e.target.classList.contains('header-cell')) {
-        this.isMouseDown = true;
-        this._handleHeaderSelection(
-          e.target.dataset.row,
-          'row',
-          e.shiftKey,
-          e.metaKey || e.ctrlKey
-        );
-      }
+    this.renderer.on('cellDoubleClick', ({ cellElement }) => {
+      const cellId = cellElement.dataset.id;
+      const rawValue = this.fileManager.getRawCellValue(cellId);
+      this.editor.startEdit(cellId, rawValue);
     });
 
-    window.addEventListener('mouseup', () => {
-      this.isMouseDown = false;
-
-      if (this.isResizing) {
-        this._stopResize();
-      }
-      if (this.isDraggingCells) {
-        this._stopDrag();
-      }
+    // 2. Header Selection
+    this.renderer.on('headerClick', ({ type, index, event }) => {
+      this.selectionManager.selectHeader(type, index, event.shiftKey, event.metaKey || event.ctrlKey);
     });
 
-    // Keyboard listener with formula bar integration
-    this.cellGridContainer.addEventListener('keydown', (e) => {
-      if (this.isEditing) return;
-      const key = e.key;
-      const isShift = e.shiftKey;
-      const isCmd = e.metaKey || e.ctrlKey;
-
-      // ADD UNDO/REDO HANDLERS HERE (before the arrow key handling)
-      if (isCmd && key === 'z') {
-        e.preventDefault();
-        if (isShift) {
-          // Cmd+Shift+Z = Redo (Mac style)
-          const didRedo = this.historyManager.redo();
-          if (didRedo) {
-            Logger.log('History', '↷ Redo performed');
-          }
-        } else {
-          // Cmd+Z = Undo
-          const didUndo = this.historyManager.undo();
-          if (didUndo) {
-            Logger.log('History', '↶ Undo performed');
-          }
-        }
-        return;
-      }
-
-      if (isCmd && key === 'y') {
-        // Ctrl+Y = Redo (Windows style)
-        e.preventDefault();
-        const didRedo = this.historyManager.redo();
-        if (didRedo) {
-          console.log('↷ Redo performed');
-        }
-        return;
-      }
-
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
-        e.preventDefault();
-        if (isCmd && isShift) {
-          this._handleCmdShiftArrowKey(key);
-        } else if (isCmd) {
-          this._handleCmdArrowKey(key);
-        } else {
-          this._handleArrowKey(key, isShift);
-        }
-      } else if (key === 'Enter') {
-        e.preventDefault();
-        // Check if formula bar is available and use it for editing
-        if (this.formulaBar && !this.isEditing) {
-          this.formulaBar.focusFormulaInput();
-        } else {
-          this._startEditing(this.activeCell);
-        }
-      } else if (key === 'F2') {
-        e.preventDefault();
-        // F2 key also starts editing
-        if (this.formulaBar && !this.isEditing) {
-          this.formulaBar.focusFormulaInput();
-        } else {
-          this._startEditing(this.activeCell);
-        }
-      } else if (key === 'Backspace') {
-        e.preventDefault();
-        this._clearSelectedCells();
-      } else if (key === 'Delete') {
-        e.preventDefault();
-        this._clearSelectedCells();
-      } else if (key.length === 1 && !isCmd && !e.altKey) {
-        e.preventDefault();
-        this._startEditing(this.activeCell, key);
-      } else if ((isCmd || e.ctrlKey) && key === 'c') {
-        e.preventDefault();
-        this._handleCopy();
-      } else if ((isCmd || e.ctrlKey) && key === 'v') {
-        e.preventDefault();
-        this._handlePaste();
-      }
-    });
-
-    // Double-click to edit
-    this.cellGridContainer.addEventListener('dblclick', (e) => {
-      if (e.target.classList.contains('cell')) {
-        this._startEditing(e.target);
-      }
-    });
-
-    // Listeners for the cell editor input
-    this.cellEditor.addEventListener('keydown', (e) => {
-      const key = e.key;
-      const isCmd = e.metaKey || e.ctrlKey;
-
-      if (key === 'Enter') {
-        e.preventDefault();
-        this._commitEdit(true);
-      } else if (key === 'Tab') {
-        e.preventDefault();
-        this._commitEdit(false);
-        this._handleArrowKey('ArrowRight', false);
-        this.cellGridContainer.focus();
-      } else if (key === 'Escape') {
-        e.preventDefault();
-        this._cancelEdit();
-      } else if (
-        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)
-      ) {
-        if (!this.isEditingIntentionally) {
-          e.preventDefault();
-          this._commitEdit(false);
-          this._handleArrowKey(key, false);
-          this.cellGridContainer.focus();
-        }
-      }
-    });
-
-    this.cellEditor.addEventListener('blur', () => {
-      if (this.isEditing) {
-        this._commitEdit(false);
-      }
-    });
-
-    // Save on Ctrl+S
-    document.addEventListener('keydown', async (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        if (this.fileManager) {
-          await this.fileManager.forceSave();
-        }
-      }
-    });
-
-    // Save before unload
-    window.addEventListener('beforeunload', async (e) => {
-      if (this.fileManager && this.fileManager.hasChanges()) {
-        e.preventDefault();
-        e.returnValue =
-          'You have unsaved changes. Are you sure you want to leave?';
-      }
-    });
-  }
-
-  // Modified selection handler with formula bar integration
-  _handleCellSelection(cell, isShift, isCmd) {
-    const coords = this._getCellCoords(cell);
-
-    if (isShift) {
-      if (this.selections.length === 0) {
-        this.selectionAnchor = this.selectionAnchor || coords;
-        this.selections.push({ start: this.selectionAnchor, end: coords });
+    // 3. Resizing
+    this.renderer.on('headerMouseDown', ({ type, event }) => {
+      const target = event.target.closest('.header-cell');
+      const cursor = this.resizer.getCursorForHeader(target, event);
+      
+      if (cursor !== 'default') {
+        // It's a resize interaction
+        const index = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
+        const currentSizes = type === 'col' ? this.renderer.columnWidths : this.renderer.rowHeights;
+        
+        // Determine which indices are being resized (if multiple selected)
+        const indices = [index]; 
+        // TODO: Add logic to check if `index` is part of a selection group to resize all
+        
+        this.resizer.startResize(type, indices, currentSizes, event);
       } else {
-        const lastSelection = this.selections[this.selections.length - 1];
-        lastSelection.end = coords;
-      }
-    } else if (isCmd) {
-      this._setActiveCell(cell);
-      this.selectionAnchor = coords;
-      this.selections.push({ start: coords, end: coords });
-    } else {
-      this._setActiveCell(cell);
-      this.selectionAnchor = coords;
-      this.selections = [{ start: coords, end: coords }];
-
-      // --- UPDATED FORMULA BAR LOGIC ---
-      if (this.formulaBar) {
-        const cellId = cell.dataset.id;
-        this.formulaBar.updateCellReference(cellId);
-
-        // 1. Get the "raw" value from our fileManager "source of truth"
-        const rawValue = this.fileManager.getRawCellValue(cellId);
-
-        // 2. Send that raw value to the formula bar
-        this.formulaBar.updateFormulaInput(rawValue);
-      }
-    }
-    this._renderSelections();
-
-    // Update FileManager metadata
-    if (this.fileManager) {
-      this.fileManager.updateMetadata({
-        lastActiveCell: cell.dataset.id,
-        selections: this.selections,
-      });
-    }
-  }
-
-  _handleHeaderSelection(index, type, isShift, isCmd) {
-    let start, end;
-    if (type === 'col') {
-      start = { col: parseInt(index, 10), row: 1 };
-      end = { col: parseInt(index, 10), row: this.ROWS };
-    } else {
-      // row
-      start = { col: 0, row: parseInt(index, 10) };
-      end = { col: this.COLS - 1, row: parseInt(index, 10) };
-    }
-
-    if (!isShift) {
-      const activeCellElement = this._getCellElement(start);
-      this._setActiveCell(activeCellElement);
-    }
-
-    if (isShift) {
-      if (this.selections.length === 0) {
-        this.selectionAnchor = start;
-        this.selections.push({ start, end });
-      } else {
-        const lastSelection = this.selections[this.selections.length - 1];
-        lastSelection.end = end;
-      }
-    } else if (isCmd) {
-      this.selectionAnchor = start;
-      this.selections.push({ start, end });
-    } else {
-      this.selectionAnchor = start;
-      this.selections = [{ start, end }];
-    }
-    this._renderSelections();
-  }
-
-  _renderSelections() {
-    this._clearSelections();
-    const cellSelectionCounts = {};
-
-    // First, calculate overlaps and highlight headers
-    this.selections.forEach((selection) => {
-      const { start, end } = selection;
-      const minCol = Math.min(start.col, end.col);
-      const maxCol = Math.max(start.col, end.col);
-      const minRow = Math.min(start.row, end.row);
-      const maxRow = Math.max(start.row, end.row);
-
-      for (let col = minCol; col <= maxCol; col++) {
-        const colHeader = this.columnHeadersContainer.querySelector(
-          `[data-col='${col}']`
-        );
-        if (colHeader) colHeader.classList.add('header-highlight');
-        for (let row = minRow; row <= maxRow; row++) {
-          const rowHeader = this.rowHeadersContainer.querySelector(
-            `[data-row='${row}']`
-          );
-          if (rowHeader) rowHeader.classList.add('header-highlight');
-          const cellId = `${String.fromCharCode(65 + col)}${row}`;
-          cellSelectionCounts[cellId] = (cellSelectionCounts[cellId] || 0) + 1;
-        }
+        // It's a selection interaction -> delegate to SelectionManager
+        const index = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
+        this.selectionManager.selectHeader(type, index, event.shiftKey, event.metaKey || event.ctrlKey);
       }
     });
 
-    // Apply background colors based on overlap count
-    for (const cellId in cellSelectionCounts) {
-      const cell = this.cellGridContainer.querySelector(
-        `[data-id='${cellId}']`
-      );
-      if (cell) {
-        const count = Math.min(cellSelectionCounts[cellId], 8);
-        cell.classList.add(`range-selected-${count}`);
-      }
-    }
+    // --- SelectionManager Events ---
 
-    // Apply perimeter borders for each selection
-    this.selections.forEach((selection) => {
-      const { start, end } = selection;
-      const minCol = Math.min(start.col, end.col);
-      const maxCol = Math.max(start.col, end.col);
-      const minRow = Math.min(start.row, end.row);
-      const maxRow = Math.max(start.row, end.row);
-
-      for (let col = minCol; col <= maxCol; col++) {
-        for (let row = minRow; row <= maxRow; row++) {
-          const cell = this._getCellElement({ col, row });
-          if (cell) {
-            if (row === minRow) cell.classList.add('range-border-top');
-            if (row === maxRow) cell.classList.add('range-border-bottom');
-            if (col === minCol) cell.classList.add('range-border-left');
-            if (col === maxCol) cell.classList.add('range-border-right');
-          }
-        }
-      }
+    this.selectionManager.on('activeCellChange', (cellId) => {
+      this._updateFormulaBar();
+      this._updateMetadata();
     });
 
-    // The active cell gets the primary selection border
-    if (this.activeCell) {
-      this.activeCell.classList.add('selected');
-    }
-  }
+    this.selectionManager.on('selectionChange', () => {
+      this._updateMetadata();
+    });
 
-  _clearSelections() {
-    this.container
-      .querySelectorAll('.header-highlight')
-      .forEach((h) => h.classList.remove('header-highlight'));
-    const selectionClasses = [
-      'selected',
-      'range-border-top',
-      'range-border-right',
-      'range-border-bottom',
-      'range-border-left',
-      'range-selected-1',
-      'range-selected-2',
-      'range-selected-3',
-      'range-selected-4',
-      'range-selected-5',
-      'range-selected-6',
-      'range-selected-7',
-      'range-selected-8',
-    ];
-    this.container
-      .querySelectorAll('.cell')
-      .forEach((c) => c.classList.remove(...selectionClasses));
-  }
+    // --- GridResizer Events ---
 
-  _handleArrowKey(key, isShift) {
-    if (!this.activeCell) return;
+    this.resizer.on('resizeUpdate', ({ type, newSizes }) => {
+      if (type === 'col') this.renderer.setColumnWidths(Object.values(newSizes)); // Simplification for V1
+      else this.renderer.setRowHeights(Object.values(newSizes));
+    });
 
-    let { row, col } = this._getCellCoords(this.activeCell);
-    if (isShift && this.selections.length > 0) {
-      const lastSelection = this.selections[this.selections.length - 1];
-      row = lastSelection.end.row;
-      col = lastSelection.end.col;
-    }
-
-    switch (key) {
-      case 'ArrowUp':
-        row = Math.max(1, row - 1);
-        break;
-      case 'ArrowDown':
-        row = Math.min(this.ROWS, row + 1);
-        break;
-      case 'ArrowLeft':
-        col = Math.max(0, col - 1);
-        break;
-      case 'ArrowRight':
-        col = Math.min(this.COLS - 1, col + 1);
-        break;
-    }
-
-    const newCell = this._getCellElement({ row, col });
-    if (newCell) {
-      if (!isShift) {
-        this._setActiveCell(newCell);
-      }
-      this._handleCellSelection(newCell, isShift, false);
-      this._scrollCellIntoView(newCell);
-    }
-  }
-
-  _handleCmdArrowKey(key) {
-    if (!this.activeCell) return;
-    let { row, col } = this._getCellCoords(this.activeCell);
-
-    const findTarget = (dr, dc) => {
-      const isCurrentCellEmpty = !this.cellData[
-        `${String.fromCharCode(65 + col)}${row}`
-      ];
-      const nextCell_r = row + dr;
-      const nextCell_c = col + dc;
-      const nextCellId = `${String.fromCharCode(65 + nextCell_c)}${nextCell_r}`;
-
-      if (!isCurrentCellEmpty && this.cellData[nextCellId]) {
-        let lastNonEmpty = { row, col };
-        let r = row;
-        let c = col;
-        while (r >= 1 && r <= this.ROWS && c >= 0 && c < this.COLS) {
-          if (!this.cellData[`${String.fromCharCode(65 + c)}${r}`]) {
-            return lastNonEmpty;
-          }
-          lastNonEmpty = { row: r, col: c };
-          r += dr;
-          c += dc;
-        }
-        return lastNonEmpty;
-      } else {
-        let r = row + dr;
-        let c = col + dc;
-        while (r >= 1 && r <= this.ROWS && c >= 0 && c < this.COLS) {
-          if (this.cellData[`${String.fromCharCode(65 + c)}${r}`]) {
-            return { row: r, col: c };
-          }
-          r += dr;
-          c += dc;
-        }
-        if (dr === -1) return { row: 1, col: col };
-        if (dr === 1) return { row: this.ROWS, col: col };
-        if (dc === -1) return { row: row, col: 0 };
-        if (dc === 1) return { row: row, col: this.COLS - 1 };
-      }
-    };
-
-    const targetCoords = findTarget(
-      ...{
-        ArrowUp: [-1, 0],
-        ArrowDown: [1, 0],
-        ArrowLeft: [0, -1],
-        ArrowRight: [0, 1],
-      }[key]
-    );
-
-    const newCell = this._getCellElement(targetCoords);
-    if (newCell) {
-      this._handleCellSelection(newCell, false, false);
-      this._scrollCellIntoView(newCell);
-    }
-  }
-
-  _handleCmdShiftArrowKey(key) {
-    if (!this.activeCell) return;
-
-    let { row, col } = this._getCellCoords(this.activeCell);
-    if (this.selections.length > 0) {
-      const lastSelection = this.selections[this.selections.length - 1];
-      row = lastSelection.end.row;
-      col = lastSelection.end.col;
-    }
-
-    const findTarget = (dr, dc) => {
-      const isCurrentCellEmpty = !this.cellData[
-        `${String.fromCharCode(65 + col)}${row}`
-      ];
-      const nextCell_r = row + dr;
-      const nextCell_c = col + dc;
-      const nextCellId = `${String.fromCharCode(65 + nextCell_c)}${nextCell_r}`;
-
-      if (!isCurrentCellEmpty && this.cellData[nextCellId]) {
-        let lastNonEmpty = { row, col };
-        let r = row;
-        let c = col;
-        while (r >= 1 && r <= this.ROWS && c >= 0 && c < this.COLS) {
-          if (!this.cellData[`${String.fromCharCode(65 + c)}${r}`]) {
-            return lastNonEmpty;
-          }
-          lastNonEmpty = { row: r, col: c };
-          r += dr;
-          c += dc;
-        }
-        return lastNonEmpty;
-      } else {
-        let r = row + dr;
-        let c = col + dc;
-        while (r >= 1 && r <= this.ROWS && c >= 0 && c < this.COLS) {
-          if (this.cellData[`${String.fromCharCode(65 + c)}${r}`]) {
-            return { row: r, col: c };
-          }
-          r += dr;
-          c += dc;
-        }
-        if (dr === -1) return { row: 1, col: col };
-        if (dr === 1) return { row: this.ROWS, col: col };
-        if (dc === -1) return { row: row, col: 0 };
-        if (dc === 1) return { row: row, col: this.COLS - 1 };
-      }
-    };
-
-    const targetCoords = findTarget(
-      ...{
-        ArrowUp: [-1, 0],
-        ArrowDown: [1, 0],
-        ArrowLeft: [0, -1],
-        ArrowRight: [0, 1],
-      }[key]
-    );
-
-    const newCell = this._getCellElement(targetCoords);
-    if (newCell) {
-      this._handleCellSelection(newCell, true, false);
-      this._scrollCellIntoView(newCell);
-    }
-  }
-
-  _setActiveCell(cell) {
-    if (cell) {
-      this.activeCell = cell;
-    }
-  }
-
-  // --- Resizing Methods with FileManager integration ---
-
-  _handleHeaderMouseMove(e) {
-    if (this.isResizing) return;
-
-    const target = e.target.closest('.header-cell');
-    if (!target) {
-      e.currentTarget.style.cursor = 'default';
-      return;
-    }
-
-    const rect = target.getBoundingClientRect();
-    const isCol = target.dataset.col !== undefined;
-
-    if (isCol) {
-      const nearRightEdge = e.clientX > rect.right - 5;
-      e.currentTarget.style.cursor = nearRightEdge ? 'col-resize' : 'default';
-    } else {
-      const nearBottomEdge = e.clientY > rect.bottom - 5;
-      e.currentTarget.style.cursor = nearBottomEdge ? 'row-resize' : 'default';
-    }
-  }
-
-  _initResize(e, type) {
-    e.preventDefault();
-    this.isResizing = true;
-
-    const target = e.target.closest('.header-cell');
-    const clickedIndex = parseInt(
-      type === 'col' ? target.dataset.col : target.dataset.row,
-      10
-    );
-
-    const indicesToResize = this._getSelectedHeaderIndices(type, clickedIndex);
-    const originalSizes = {};
-    indicesToResize.forEach((index) => {
+    this.resizer.on('resizeEnd', ({ type, finalSizes }) => {
+      // 1. Apply visually
       if (type === 'col') {
-        originalSizes[index] = this.columnWidths[index];
+        // This is a simplification. Ideally we merge `finalSizes` into existing array.
+        // For V1 we assume single resize or we need a smarter merge method.
+        const mergedWidths = [...this.renderer.columnWidths];
+        Object.entries(finalSizes).forEach(([idx, size]) => mergedWidths[idx] = size);
+        this.renderer.setColumnWidths(mergedWidths);
+        
+        // 2. Save to FileManager
+        if (this.fileManager) this.fileManager.updateColumnWidths(mergedWidths);
       } else {
-        originalSizes[index] = this.rowHeights[index - 1];
+        const mergedHeights = [...this.renderer.rowHeights];
+        Object.entries(finalSizes).forEach(([idx, size]) => mergedHeights[idx] = size);
+        this.renderer.setRowHeights(mergedHeights);
+        
+        if (this.fileManager) this.fileManager.updateRowHeights(mergedHeights);
       }
     });
 
-    this.resizeInfo = {
-      type: type,
-      startPos: type === 'col' ? e.clientX : e.clientY,
-      indices: indicesToResize,
-      originalSizes: originalSizes,
-      clickedIndex: clickedIndex,
-    };
+    // --- EditorManager Events ---
 
-    this._onResize = this._onResize.bind(this);
-    this._stopResize = this._stopResize.bind(this);
-    window.addEventListener('mousemove', this._onResize);
-    window.addEventListener('mouseup', this._stopResize, { once: true });
-  }
-
-  _getSelectedHeaderIndices(type, clickedIndex) {
-    const indices = new Set([clickedIndex]);
-    const checkCol = type === 'col';
-
-    const isFullCol = (sel) => {
-      const minRow = Math.min(sel.start.row, sel.end.row);
-      const maxRow = Math.max(sel.start.row, sel.end.row);
-      return minRow === 1 && maxRow === this.ROWS;
-    };
-    const isFullRow = (sel) => {
-      const minCol = Math.min(sel.start.col, sel.end.col);
-      const maxCol = Math.max(sel.start.col, sel.end.col);
-      return minCol === 0 && maxCol === this.COLS - 1;
-    };
-
-    let inSelection = false;
-
-    for (const sel of this.selections) {
-      if (checkCol && isFullCol(sel)) {
-        const min = Math.min(sel.start.col, sel.end.col);
-        const max = Math.max(sel.start.col, sel.end.col);
-        if (clickedIndex >= min && clickedIndex <= max) {
-          inSelection = true;
-          break;
-        }
-      } else if (!checkCol && isFullRow(sel)) {
-        const min = Math.min(sel.start.row, sel.end.row);
-        const max = Math.max(sel.start.row, sel.end.row);
-        if (clickedIndex >= min && clickedIndex <= max) {
-          inSelection = true;
-          break;
-        }
-      }
-    }
-
-    if (inSelection) {
-      this.selections.forEach((sel) => {
-        if (checkCol && isFullCol(sel)) {
-          const min = Math.min(sel.start.col, sel.end.col);
-          const max = Math.max(sel.start.col, sel.end.col);
-          for (let i = min; i <= max; i++) {
-            indices.add(i);
-          }
-        } else if (!checkCol && isFullRow(sel)) {
-          const min = Math.min(sel.start.row, sel.end.row);
-          const max = Math.max(sel.start.row, sel.end.row);
-          for (let i = min; i <= max; i++) {
-            indices.add(i);
-          }
-        }
-      });
-    }
-
-    return Array.from(indices);
-  }
-
-  _onResize(e) {
-    if (!this.isResizing) return;
-
-    const {
-      type,
-      startPos,
-      indices,
-      originalSizes,
-      clickedIndex,
-    } = this.resizeInfo;
-    const currentPos = type === 'col' ? e.clientX : e.clientY;
-    const delta = currentPos - startPos;
-
-    const clickedOriginalSize = originalSizes[clickedIndex];
-
-    let newSize;
-    if (type === 'col') {
-      newSize = Math.max(this.MIN_COL_WIDTH, clickedOriginalSize + delta);
-    } else {
-      newSize = Math.max(this.MIN_ROW_HEIGHT, clickedOriginalSize + delta);
-    }
-
-    indices.forEach((index) => {
-      if (type === 'col') {
-        this.columnWidths[index] = newSize;
-      } else {
-        this.rowHeights[index - 1] = newSize;
-      }
+    this.editor.on('commit', ({ cellId, value, moveDirection }) => {
+      this._executeCellUpdate(cellId, value);
+      
+      // Handle post-edit navigation
+      if (moveDirection === 'down') this.selectionManager.moveSelection('down');
+      else if (moveDirection === 'right') this.selectionManager.moveSelection('right');
+      
+      // Refocus grid
+      this.renderer.cellGridContainer.focus();
     });
 
-    this._applyGridStyles();
+    // --- Global Keyboard Events ---
+    
+    this.renderer.cellGridContainer.tabIndex = 0; // Ensure focusable
+    this.renderer.cellGridContainer.addEventListener('keydown', (e) => {
+      this._handleGlobalKeydown(e);
+    });
   }
 
-  _stopResize() {
-    this.isResizing = false;
-    this.resizeInfo = {};
-    window.removeEventListener('mousemove', this._onResize);
+  _setupWorkerListeners() {
+    if (!this.formulaWorker) return;
 
-    // Save column/row sizes to FileManager
-    if (this.fileManager) {
-      this.fileManager.updateColumnWidths(this.columnWidths);
-      this.fileManager.updateRowHeights(this.rowHeights);
-    }
-  }
+    this.formulaWorker.onmessage = (event) => {
+      const { type, payload } = event.data;
 
-  // --- Drag-to-Move Methods ---
-
-  _handleGridMouseMove(e) {
-    if (this.isResizing || this.isMouseDown || this.isDraggingCells) return;
-
-    const cell = e.target.closest('.cell');
-
-    if (
-      cell &&
-      cell.classList.contains('range-selected-1') &&
-      this.selections.length > 0
-    ) {
-      const rect = cell.getBoundingClientRect();
-      const onTop =
-        cell.classList.contains('range-border-top') && e.clientY < rect.top + 5;
-      const onBottom =
-        cell.classList.contains('range-border-bottom') &&
-        e.clientY > rect.bottom - 5;
-      const onLeft =
-        cell.classList.contains('range-border-left') &&
-        e.clientX < rect.left + 5;
-      const onRight =
-        cell.classList.contains('range-border-right') &&
-        e.clientX > rect.right - 5;
-
-      if (onTop || onBottom || onLeft || onRight) {
-        this.cellGridContainer.style.cursor = 'grab';
-      } else {
-        this.cellGridContainer.style.cursor = 'default';
-      }
-    } else {
-      this.cellGridContainer.style.cursor = 'default';
-    }
-  }
-
-  _initDrag(e) {
-    e.preventDefault();
-    this.isDraggingCells = true;
-    this.cellGridContainer.style.cursor = 'grabbing';
-
-    const selection = this.selections[this.selections.length - 1];
-
-    const minCol = Math.min(selection.start.col, selection.end.col);
-    const maxCol = Math.max(selection.start.col, selection.end.col);
-    const minRow = Math.min(selection.start.row, selection.end.row);
-    const maxRow = Math.max(selection.start.row, selection.end.row);
-
-    let width = 0;
-    for (let c = minCol; c <= maxCol; c++) width += this.columnWidths[c];
-    let height = 0;
-    for (let r = minRow; r <= maxRow; r++) height += this.rowHeights[r - 1];
-
-    this.ghostElement = document.createElement('div');
-    this.ghostElement.id = 'drag-ghost';
-    this.ghostElement.style.width = `${width}px`;
-    this.ghostElement.style.height = `${height}px`;
-
-    const startCellEl = this._getCellElement({ col: minCol, row: minRow });
-    const gridRect = this.cellGridContainer.getBoundingClientRect();
-
-    const initialLeft =
-      startCellEl.offsetLeft - this.cellGridContainer.scrollLeft;
-    const initialTop = startCellEl.offsetTop - this.cellGridContainer.scrollTop;
-
-    this.ghostElement.style.left = `${initialLeft}px`;
-    this.ghostElement.style.top = `${initialTop}px`;
-
-    this.container.appendChild(this.ghostElement);
-
-    const dragStartCoords = { col: minCol, row: minRow };
-
-    this.dragInfo = {
-      selection: selection,
-      dragStartCoords: dragStartCoords,
-      mouseOffset: {
-        x: e.clientX - gridRect.left - initialLeft,
-        y: e.clientY - gridRect.top - initialTop,
-      },
-      lastSnapCoords: null,
-    };
-
-    this._onDrag = this._onDrag.bind(this);
-    this._stopDrag = this._stopDrag.bind(this);
-    window.addEventListener('mousemove', this._onDrag);
-    window.addEventListener('mouseup', this._stopDrag, { once: true });
-  }
-
-  _onDrag(e) {
-    if (!this.isDraggingCells) return;
-
-    const dropTarget = document
-      .elementFromPoint(e.clientX, e.clientY)
-      .closest('.cell');
-
-    if (!dropTarget) return;
-
-    const dropCoords = this._getCellCoords(dropTarget);
-
-    if (
-      this.dragInfo.lastSnapCoords &&
-      this.dragInfo.lastSnapCoords.row === dropCoords.row &&
-      this.dragInfo.lastSnapCoords.col === dropCoords.col
-    ) {
-      return;
-    }
-    this.dragInfo.lastSnapCoords = dropCoords;
-
-    const newLeft = dropTarget.offsetLeft - this.cellGridContainer.scrollLeft;
-    const newTop = dropTarget.offsetTop - this.cellGridContainer.scrollTop;
-
-    this.ghostElement.style.left = `${newLeft}px`;
-    this.ghostElement.style.top = `${newTop}px`;
-  }
-
-  _stopDrag() {
-    if (!this.isDraggingCells) return;
-
-    const ghostRect = this.ghostElement.getBoundingClientRect();
-    const dropTarget = document
-      .elementFromPoint(ghostRect.left + 2, ghostRect.top + 2)
-      .closest('.cell');
-
-    if (dropTarget) {
-      const dropCoords = this._getCellCoords(dropTarget);
-      const { dragStartCoords, selection } = this.dragInfo;
-
-      const rowOffset = dropCoords.row - dragStartCoords.row;
-      const colOffset = dropCoords.col - dragStartCoords.col;
-
-      if (rowOffset !== 0 || colOffset !== 0) {
-        this._moveSelection(selection, colOffset, rowOffset);
-      }
-    }
-
-    this.ghostElement.remove();
-    this.ghostElement = null;
-    this.isDraggingCells = false;
-    this.dragInfo = {};
-    this.cellGridContainer.style.cursor = 'default';
-    window.removeEventListener('mousemove', this._onDrag);
-  }
-
-  _moveSelection(selection, colOffset, rowOffset) {
-    const { start, end } = selection;
-    const minCol = Math.min(start.col, end.col);
-    const maxCol = Math.max(start.col, end.col);
-    const minRow = Math.min(start.row, end.row);
-    const maxRow = Math.max(start.row, end.row);
-
-    const dataToMove = [];
-
-    for (let col = minCol; col <= maxCol; col++) {
-      for (let row = minRow; row <= maxRow; row++) {
-        const cell = this._getCellElement({ col, row });
-        const data = this.cellData[cell.dataset.id];
-        if (data) {
-          dataToMove.push({ col, row, data });
-        }
-      }
-    }
-
-    for (let col = minCol; col <= maxCol; col++) {
-      for (let row = minRow; row <= maxRow; row++) {
-        this._updateCell(this._getCellElement({ col, row }), '');
-      }
-    }
-
-    dataToMove.forEach((item) => {
-      const targetCol = item.col + colOffset;
-      const targetRow = item.row + rowOffset;
-
-      if (
-        targetCol >= 0 &&
-        targetCol < this.COLS &&
-        targetRow > 0 &&
-        targetRow <= this.ROWS
-      ) {
-        const targetCell = this._getCellElement({
-          col: targetCol,
-          row: targetRow,
+      if (type === 'updates') {
+        // Batch update the DOM
+        Object.entries(payload.updates).forEach(([cellId, value]) => {
+          this.renderer.updateCellContent(cellId, value);
         });
-        this._updateCell(targetCell, item.data);
+      } else if (type === 'error') {
+        Logger.error('Worker', payload.message);
       }
-    });
-
-    const newStart = { col: start.col + colOffset, row: start.row + rowOffset };
-    const newEnd = { col: end.col + colOffset, row: end.row + rowOffset };
-    this.selections = [{ start: newStart, end: newEnd }];
-
-    const newAnchorCoords = {
-      col: this.dragInfo.dragStartCoords.col + colOffset,
-      row: this.dragInfo.dragStartCoords.row + rowOffset,
     };
-    this.selectionAnchor = newAnchorCoords;
-    this._setActiveCell(this._getCellElement(newAnchorCoords));
-
-    this._renderSelections();
   }
 
-  // --- Modified Editing methods with FileManager integration ---
+  // ==========================================================================
+  // LOGIC HELPERS
+  // ==========================================================================
 
-  _startEditing(cell, initialValue = '') {
-    this.isEditingIntentionally = initialValue === '';
+  _handleGlobalKeydown(e) {
+    if (this.editor.isEditing) return; // Let EditorManager handle it
 
-    this.isEditing = true;
-    this.editingCell = cell;
-    this.editingCell.classList.add('editing');
+    const key = e.key;
+    const isCmd = e.metaKey || e.ctrlKey;
+    const isShift = e.shiftKey;
 
-    const cellRect = cell.getBoundingClientRect();
-    const scrollLeft = this.cellGridContainer.scrollLeft;
-    const scrollTop = this.cellGridContainer.scrollTop;
-
-    this.cellEditor.style.left = `${cell.offsetLeft - scrollLeft}px`;
-    this.cellEditor.style.top = `${cell.offsetTop - scrollTop}px`;
-    this.cellEditor.style.width = `${cellRect.width}px`;
-    this.cellEditor.style.height = `${cellRect.height}px`;
-
-    this.cellEditor.value =
-      initialValue || this.cellData[cell.dataset.id] || '';
-    this.cellEditor.style.display = 'block';
-    this.cellEditor.focus();
-    this.cellEditor.selectionStart = this.cellEditor.selectionEnd = this.cellEditor.value.length;
-  }
-
-  _commitEdit(moveSelection = true) {
-    if (!this.editingCell) return;
-
-    const newValue = this.cellEditor.value;
-    const cellId = this.editingCell.dataset.id;
-
-    this._updateCell(this.editingCell, newValue);
-
-    const previouslyEditingCell = this.editingCell;
-    this._cancelEdit();
-
-    if (moveSelection) {
-      this._handleArrowKey('ArrowDown', false);
+    // 1. History (Undo/Redo)
+    if (isCmd && key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (isShift) this.historyManager.redo();
+      else this.historyManager.undo();
+      return;
     }
-  }
+    if (isCmd && key.toLowerCase() === 'y') {
+      e.preventDefault();
+      this.historyManager.redo();
+      return;
+    }
 
-  _cancelEdit() {
-    if (!this.editingCell) return;
+    // 2. Clipboard
+    if (isCmd && key.toLowerCase() === 'c') {
+      e.preventDefault();
+      this.clipboardManager.copy(this.selectionManager.ranges);
+      return;
+    }
+    if (isCmd && key.toLowerCase() === 'v') {
+      e.preventDefault();
+      this._handlePaste();
+      return;
+    }
 
-    this.editingCell.classList.remove('editing');
-    this.isEditing = false;
-    this.editingCell = null;
-    this.cellEditor.style.display = 'none';
-    this.cellEditor.value = '';
-
-    this.cellGridContainer.focus();
-  }
-
-  /**
-   * Clears all selected cells using the command pattern
-   */
-  _clearSelectedCells() {
-    // Build array of all cells to clear
-    const cellUpdates = [];
-
-    this.selections.forEach((selection) => {
-      const { start, end } = selection;
-      const minCol = Math.min(start.col, end.col);
-      const maxCol = Math.max(start.col, end.col);
-      const minRow = Math.min(start.row, end.row);
-      const maxRow = Math.max(start.row, end.row);
-
-      for (let col = minCol; col <= maxCol; col++) {
-        for (let row = minRow; row <= maxRow; row++) {
-          const cell = this._getCellElement({ col, row });
-          if (!cell) continue;
-
-          const cellId = cell.dataset.id;
-          const oldValue = this.fileManager.getRawCellValue(cellId);
-
-          // Only add to updates if cell has content
-          if (oldValue) {
-            cellUpdates.push({
-              cellId,
-              newValue: '',
-              oldValue,
-            });
-          }
-        }
+    // 3. Navigation (Arrows)
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+      e.preventDefault();
+      const direction = key.replace('Arrow', '').toLowerCase();
+      
+      if (isCmd) {
+        // TODO: implement jumpToEdge in SelectionManager
+        // this.selectionManager.jumpToEdge(direction); 
+      } else {
+        this.selectionManager.moveSelection(direction, isShift);
       }
-    });
+      return;
+    }
 
-    // Only execute command if there's something to clear
-    if (cellUpdates.length > 0) {
-      const command = new UpdateCellsCommand({
-        cellUpdates,
-        fileManager: this.fileManager,
-        formulaWorker: this.formulaWorker,
-      });
-      this.historyManager.execute(command);
+    // 4. Editing
+    if (key === 'Enter') {
+      e.preventDefault();
+      const activeId = this.selectionManager.getActiveCellId();
+      if (activeId) {
+        const rawValue = this.fileManager.getRawCellValue(activeId);
+        this.editor.startEdit(activeId, rawValue);
+      }
+      return;
+    }
+    
+    if (key === 'Backspace' || key === 'Delete') {
+      e.preventDefault();
+      this._clearSelection();
+      return;
+    }
+
+    // 5. Type to overwrite
+    // If it's a printable character and no special modifiers
+    if (key.length === 1 && !isCmd && !e.altKey) {
+      const activeId = this.selectionManager.getActiveCellId();
+      if (activeId) {
+        this.editor.startEdit(activeId, '', key); // Start empty, pass trigger key
+      }
     }
   }
 
-  // --- Modified Helper Methods with FileManager integration ---
-
-  /**
-   * Updates a cell's value using the command pattern
-   * This method now creates a command instead of directly modifying state
-   */
-  _updateCell(cell, value) {
-    if (!cell) return;
-
-    const cellId = cell.dataset.id;
-
-    // CRITICAL: Capture OLD state BEFORE creating command
-    // The fileManager is the source of truth for raw values
+  _executeCellUpdate(cellId, newValue) {
     const oldValue = this.fileManager.getRawCellValue(cellId);
+    
+    // Don't update if no change (optimization)
+    if (newValue === oldValue) return;
 
-    // Create and execute command
     const command = new UpdateCellsCommand({
-      cellUpdates: [
-        {
-          cellId,
-          newValue: value,
-          oldValue,
-        },
-      ],
+      cellUpdates: [{ cellId, newValue, oldValue }],
       fileManager: this.fileManager,
-      formulaWorker: this.formulaWorker,
+      formulaWorker: this.formulaWorker
     });
 
     this.historyManager.execute(command);
-
-    // IMPORTANT: Do NOT manually update anything here!
-    // The command handles:
-    // 1. fileManager.updateCellData() - updates source of truth
-    // 2. worker.postMessage() - triggers calculation
-    // 3. Worker sends 'updates' message back
-    // 4. Our _applyUpdates() method updates the DOM
   }
 
-  _getCellCoords(cell) {
-    if (!cell) return { row: -1, col: -1 };
-    return {
-      row: parseInt(cell.dataset.row, 10),
-      col: parseInt(cell.dataset.col, 10),
-    };
-  }
-
-  _getCellElement(coords) {
-    if (!coords) return null;
-    return this.cellGridContainer.querySelector(
-      `[data-col='${coords.col}'][data-row='${coords.row}']`
-    );
-  }
-
-  _scrollCellIntoView(cell) {
-    const grid = this.cellGridContainer;
-    const cellRect = cell.getBoundingClientRect();
-    const gridRect = grid.getBoundingClientRect();
-
-    if (cellRect.bottom > gridRect.bottom) {
-      grid.scrollTop += cellRect.bottom - gridRect.bottom;
-    } else if (cellRect.top < gridRect.top) {
-      grid.scrollTop -= gridRect.top - cellRect.top;
-    }
-
-    if (cellRect.right > gridRect.right) {
-      grid.scrollLeft += cellRect.right - gridRect.right;
-    } else if (cellRect.left < gridRect.left) {
-      grid.scrollLeft -= gridRect.left - cellRect.left;
-    }
-  }
-
-  _handleCopy() {
-    // Clear previous copy visual indicators
-    this._clearCopyIndicators();
-
-    // Get current selection
-    const cellsToCopy = this._getSelectedCells();
-
-    // Store in clipboard
-    this.clipboard = {
-      data: cellsToCopy.map((cell) => ({
-        cellId: cell.dataset.id,
-        value: this.fileManager.getRawCellValue(cell.dataset.id),
-        relativePos: this._getRelativePosition(cell, cellsToCopy[0]),
-      })),
-      sourceBounds: this._getSelectionBounds(),
-      timestamp: Date.now(),
-    };
-
-    // Add visual feedback (dotted border on copied cells)
-    this._showCopyIndicators(cellsToCopy);
-
-    // Also copy to system clipboard as tab-delimited text
-    this._copyToSystemClipboard(cellsToCopy);
-  }
-
-  /**
-   * Handles paste operation using the command pattern
-   */
   _handlePaste() {
-    if (!this.clipboard.data) {
-      console.warn('Nothing to paste - clipboard is empty');
-      return;
-    }
+    const activeCellCoords = this.selectionManager.activeCell;
+    if (!activeCellCoords) return;
 
-    const targetCell = this.activeCell;
-    if (!targetCell) {
-      console.warn('No active cell to paste into');
-      return;
-    }
+    // Get calculations from ClipboardManager
+    const updates = this.clipboardManager.getPasteUpdates(activeCellCoords);
+    if (updates.length === 0) return;
 
-    const targetCoords = this._getCellCoords(targetCell);
+    // Hydrate updates with oldValues for Undo
+    const cellUpdates = updates.map(update => ({
+      cellId: update.cellId,
+      newValue: update.value,
+      oldValue: this.fileManager.getRawCellValue(update.cellId)
+    }));
+
+    // Execute unified command
+    const command = new UpdateCellsCommand({
+      cellUpdates,
+      fileManager: this.fileManager,
+      formulaWorker: this.formulaWorker
+    });
+
+    this.historyManager.execute(command);
+    this.clipboardManager.clearVisuals();
+  }
+
+  _clearSelection() {
+    const cellIds = this.selectionManager.getSelectedCellIds();
     const cellUpdates = [];
 
-    // Build updates array
-    this.clipboard.data.forEach((cellData) => {
-      const newRow = targetCoords.row + cellData.relativePos.row;
-      const newCol = targetCoords.col + cellData.relativePos.col;
-
-      // Check bounds
-      if (
-        newRow <= this.ROWS &&
-        newCol < this.COLS &&
-        newRow > 0 &&
-        newCol >= 0
-      ) {
-        const targetCellId = this._buildCellId(newRow, newCol);
-        const oldValue = this.fileManager.getRawCellValue(targetCellId);
-
+    cellIds.forEach(cellId => {
+      const oldValue = this.fileManager.getRawCellValue(cellId);
+      if (oldValue !== '' && oldValue !== undefined) {
         cellUpdates.push({
-          cellId: targetCellId,
-          newValue: cellData.value,
-          oldValue: oldValue,
+          cellId,
+          newValue: '',
+          oldValue
         });
       }
     });
 
-    // Execute as single command
     if (cellUpdates.length > 0) {
       const command = new UpdateCellsCommand({
         cellUpdates,
         fileManager: this.fileManager,
-        formulaWorker: this.formulaWorker,
+        formulaWorker: this.formulaWorker
       });
       this.historyManager.execute(command);
     }
-
-    // Clear copy indicators
-    this._clearCopyIndicators();
   }
 
-  /**
-   * Helper method to build cell ID from coordinates
-   */
-  _buildCellId(row, col) {
-    const colLetter = String.fromCharCode(65 + col);
-    return `${colLetter}${row}`;
+  _updateFormulaBar() {
+    if (!this.formulaBar) return;
+    const cellId = this.selectionManager.getActiveCellId();
+    if (cellId) {
+      this.formulaBar.updateCellReference(cellId);
+      const raw = this.fileManager.getRawCellValue(cellId);
+      this.formulaBar.updateFormulaInput(raw);
+    }
   }
 
-  _getSelectedCells() {
-    const cells = [];
-    this.selections.forEach((selection) => {
-      const { start, end } = selection;
-      const minCol = Math.min(start.col, end.col);
-      const maxCol = Math.max(start.col, end.col);
-      const minRow = Math.min(start.row, end.row);
-      const maxRow = Math.max(start.row, end.row);
-
-      for (let row = minRow; row <= maxRow; row++) {
-        for (let col = minCol; col <= maxCol; col++) {
-          const cell = this._getCellElement({ row, col });
-          if (cell) cells.push(cell);
-        }
-      }
+  _updateMetadata() {
+    if (!this.fileManager) return;
+    this.fileManager.updateMetadata({
+      lastActiveCell: this.selectionManager.getActiveCellId(),
+      selections: this.selectionManager.ranges
     });
-    return cells;
   }
 
-  _getRelativePosition(cell, anchorCell) {
-    const cellCoords = this._getCellCoords(cell);
-    const anchorCoords = this._getCellCoords(anchorCell);
+  _getCellCoordsFromElement(cell) {
     return {
-      row: cellCoords.row - anchorCoords.row,
-      col: cellCoords.col - anchorCoords.col,
+      row: parseInt(cell.dataset.row, 10),
+      col: parseInt(cell.dataset.col, 10)
     };
   }
 
-  _getSelectionBounds() {
-    // Calculate min/max row and col from all selections
-    // Return { minRow, maxRow, minCol, maxCol }
+  _cellIdToCoords(cellId) {
+    const match = cellId.match(/([A-Z]+)(\d+)/);
+    if (!match) return null;
+    return {
+      col: CellHelpers.colLetterToIdx(match[1]),
+      row: parseInt(match[2], 10)
+    };
   }
-
-  _copyToSystemClipboard(cells) {
-    // Create tab-delimited text
-    // Use navigator.clipboard.writeText() if available
-    // Fallback to document.execCommand('copy')
+  
+  // Interface methods required by FormulaBar/Legacy
+  setCellValue(cellId, value) {
+    this._executeCellUpdate(cellId, value);
   }
-
-  _clearCopyIndicators() {
-    // Placeholder - this function has to be written later
+  
+  selectCell(cellId) {
+    const coords = this._cellIdToCoords(cellId);
+    if (coords) this.selectionManager.selectCell(coords);
+  }
+  
+  getCellValue(cellId) {
+    // Used by formula bar cancel
+    return this.fileManager.getRawCellValue(cellId);
   }
 }
-
-export { Spreadsheet };
