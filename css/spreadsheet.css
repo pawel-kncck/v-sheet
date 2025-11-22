@@ -256,6 +256,7 @@ body {
 
 /* Main container using CSS Grid */
 #spreadsheet-container {
+  position: relative;
   display: grid;
   grid-template-areas:
     'corner columns'

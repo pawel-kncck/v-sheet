@@ -1,6 +1,7 @@
 // Core Dependencies
 import { HistoryManager } from './history/HistoryManager.js';
 import { UpdateCellsCommand } from './history/commands/UpdateCellsCommand.js';
+import { MoveRangeCommand } from './history/commands/MoveRangeCommand.js';
 import { Logger } from './engine/utils/Logger.js';
 import { CellHelpers } from './engine/utils/CellHelpers.js';
 
@@ -45,6 +46,14 @@ export class Spreadsheet {
 
     // History
     this.historyManager = new HistoryManager(100);
+
+    // State for Drag-and-Drop
+    this.isDraggingCells = false;
+    this.dragInfo = {};
+
+    // Bind drag handlers to this instance
+    this._onDragMouseMove = this._onDragMouseMove.bind(this);
+    this._onDragMouseUp = this._onDragMouseUp.bind(this);
 
     // External Dependencies (injected via setters later)
     this.fileManager = null;
@@ -91,6 +100,11 @@ export class Spreadsheet {
     // 2. Reset Modules
     this.selectionManager.clear();
     // We intentionally don't clear clipboard on file load (allows copy-paste between files)
+
+    // Explicitly clear all visual cell content to prevent "ghost" data
+    // from the previous file persisting in the DOM.
+    const cells = this.renderer.cellGridContainer.querySelectorAll('.cell');
+    cells.forEach(cell => cell.textContent = '');
 
     // 3. Apply Structure (Widths/Heights)
     if (fileData.columnWidths) {
@@ -145,6 +159,34 @@ export class Spreadsheet {
       if (this.editor.isEditing) return; // Don't select if editing
       
       const coords = this._getCellCoordsFromElement(cellElement);
+
+      // --- NEW DRAG LOGIC START ---
+      const cursor = this.selectionManager.getCursorForCell(coords, event, cellElement);
+      
+      if (cursor === 'grab') {
+        this.isDraggingCells = true;
+        
+        // Get the active selection range
+        const ranges = this.selectionManager.ranges;
+        const activeRange = ranges[ranges.length - 1];
+
+        // Store drag start data
+        this.dragInfo = {
+          startX: event.clientX,
+          startY: event.clientY,
+          startCoords: coords, // Store the exact cell we clicked
+          selection: activeRange
+        };
+
+        // Show visual ghost
+        this.renderer.showDragGhost(activeRange);
+
+        // Attach global listeners
+        window.addEventListener('mousemove', this._onDragMouseMove);
+        window.addEventListener('mouseup', this._onDragMouseUp, { once: true });
+        
+        return; // Stop! Do not re-select the cell we just clicked
+      }
       
       // Right click? Just select single cell if not in current selection
       if (event.button === 2) {
@@ -157,10 +199,17 @@ export class Spreadsheet {
 
     this.renderer.on('cellMouseOver', ({ cellElement, event }) => {
       if (this.editor.isEditing) return;
-      if (event.buttons !== 1) return; // Only if left mouse button is held
+      if (this.isDraggingCells) return;
 
       const coords = this._getCellCoordsFromElement(cellElement);
-      this.selectionManager.selectCell(coords, true, false); // Always extend on drag
+
+      if (event.buttons === 1) {
+        this.selectionManager.selectCell(coords, true, false);
+      } else {
+        // PASS EXTRA ARGS HERE
+        const cursor = this.selectionManager.getCursorForCell(coords, event, cellElement);
+        cellElement.style.cursor = cursor;
+      }
     });
 
     this.renderer.on('cellDoubleClick', ({ cellElement }) => {
@@ -281,6 +330,108 @@ export class Spreadsheet {
     };
   }
 
+
+
+  // ==========================================================================
+  // DRAG AND DROP HANDLERS
+  // ==========================================================================
+
+  _onDragMouseMove(e) {
+    if (!this.isDraggingCells) return;
+
+    // 1. Find the cell currently under the mouse
+    // We hide the ghost momentarily so elementFromPoint sees the cell below it, not the ghost
+    const ghost = document.getElementById('drag-ghost');
+    if (ghost) ghost.style.display = 'none';
+    
+    const targetElement = document.elementFromPoint(e.clientX, e.clientY);
+    const targetCell = targetElement ? targetElement.closest('.cell') : null;
+    
+    if (ghost) ghost.style.display = 'block'; // Show ghost again
+
+    // 2. Calculate Snap Delta
+    if (targetCell) {
+      const startCoords = this.dragInfo.startCoords; // {row, col} where we clicked
+      const currentCoords = this._getCellCoordsFromElement(targetCell);
+
+      // Calculate grid-based offset (e.g., moved 2 cols right, 1 row down)
+      const colDiff = currentCoords.col - startCoords.col;
+      const rowDiff = currentCoords.row - startCoords.row;
+
+      // Don't update if we haven't moved to a new cell
+      if (colDiff === 0 && rowDiff === 0) {
+        this.renderer.updateDragGhost(0, 0);
+        return;
+      }
+
+      // 3. Calculate Pixel Delta based on Cell Positions
+      // We find the Start Cell Element and the Current Target Cell Element
+      // and measure the physical distance between their top-left corners.
+      const startCellEl = this.renderer.getCellElementByCoords(startCoords.row, startCoords.col);
+      
+      if (startCellEl && targetCell) {
+        const startRect = startCellEl.getBoundingClientRect();
+        const targetRect = targetCell.getBoundingClientRect();
+
+        const deltaX = targetRect.left - startRect.left;
+        const deltaY = targetRect.top - startRect.top;
+
+        this.renderer.updateDragGhost(deltaX, deltaY);
+      }
+    }
+  }
+
+  _onDragMouseUp(e) {
+    if (!this.isDraggingCells) return;
+
+    try {
+      // 1. Find the cell under the mouse cursor
+      // We hide the ghost first to ensure elementFromPoint sees the cell below it
+      this.renderer.hideDragGhost();
+      
+      const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
+      const cell = dropTarget ? dropTarget.closest('.cell') : null;
+
+      if (cell) {
+        const dropCoords = this._getCellCoordsFromElement(cell);
+        const { selection, startCoords } = this.dragInfo;
+
+        // Safety check: ensure we have startCoords (prevent crash if drag start failed)
+        if (!startCoords) {
+            console.error('Missing startCoords in dragInfo');
+            return;
+        }
+
+        // 2. Calculate the offset
+        const colOffset = dropCoords.col - startCoords.col;
+        const rowOffset = dropCoords.row - startCoords.row;
+
+        // 3. Execute Move (only if we actually moved to a new cell)
+        if (colOffset !== 0 || rowOffset !== 0) {
+          // Calculate new top-left for the range
+          const newTopLeft = {
+            col: selection.start.col + colOffset,
+            row: selection.start.row + rowOffset
+          };
+          
+          this._executeMoveCommand(selection, colOffset, rowOffset, newTopLeft);
+        }
+      }
+    } catch (error) {
+      console.error('Drag operation failed:', error);
+    } finally {
+      // 4. Cleanup - This ALWAYS runs, ensuring the app doesn't get stuck
+      this.isDraggingCells = false;
+      this.dragInfo = {};
+      window.removeEventListener('mousemove', this._onDragMouseMove);
+      
+      // Reset cursor
+      if (this.renderer && this.renderer.cellGridContainer) {
+        this.renderer.cellGridContainer.style.cursor = 'default';
+      }
+    }
+  }
+
   // ==========================================================================
   // LOGIC HELPERS
   // ==========================================================================
@@ -323,8 +474,11 @@ export class Spreadsheet {
       const direction = key.replace('Arrow', '').toLowerCase();
       
       if (isCmd) {
-        // TODO: implement jumpToEdge in SelectionManager
-        // this.selectionManager.jumpToEdge(direction); 
+        // Pass the direction AND a way to check data (for finding edges)
+        this.selectionManager.jumpToEdge(direction, (cellId) => {
+            const val = this.fileManager.getRawCellValue(cellId);
+            return val !== '' && val !== null && val !== undefined;
+        }); 
       } else {
         this.selectionManager.moveSelection(direction, isShift);
       }
@@ -473,4 +627,85 @@ export class Spreadsheet {
     // Used by formula bar cancel
     return this.fileManager.getRawCellValue(cellId);
   }
+
+  _executeMoveCommand(selection, colOffset, rowOffset, targetTopLeft) {
+    const { start, end } = selection;
+    const minCol = Math.min(start.col, end.col);
+    const maxCol = Math.max(start.col, end.col);
+    const minRow = Math.min(start.row, end.row);
+    const maxRow = Math.max(start.row, end.row);
+
+    // 1. Collect data being moved
+    const movedData = [];
+    for (let col = minCol; col <= maxCol; col++) {
+      for (let row = minRow; row <= maxRow; row++) {
+        const cellId = this._buildCellId(row, col);
+        const value = this.fileManager.getRawCellValue(cellId);
+        if (value !== undefined && value !== '') {
+          movedData.push({ cellId, value });
+        }
+      }
+    }
+
+    if (movedData.length === 0) return; // Nothing to move
+
+    // 2. Collect data being overwritten at destination
+    const overwrittenData = [];
+    const targetMinCol = targetTopLeft.col;
+    const targetMinRow = targetTopLeft.row;
+    
+    // Calculate destination bounds
+    const width = maxCol - minCol;
+    const height = maxRow - minRow;
+
+    for (let col = targetMinCol; col <= targetMinCol + width; col++) {
+      for (let row = targetMinRow; row <= targetMinRow + height; row++) {
+        const cellId = this._buildCellId(row, col);
+        const value = this.fileManager.getRawCellValue(cellId);
+        if (value !== undefined && value !== '') {
+          overwrittenData.push({ cellId, value });
+        }
+      }
+    }
+
+    // 3. Create and execute command
+    const command = new MoveRangeCommand({
+      sourceRange: { minCol, maxCol, minRow, maxRow },
+      targetTopLeft,
+      movedData,
+      overwrittenData,
+      fileManager: this.fileManager,
+      formulaWorker: this.formulaWorker
+    });
+
+    this.historyManager.execute(command);
+
+    // 4. Update selection to follow the moved data
+    const newStart = {
+      col: start.col + colOffset,
+      row: start.row + rowOffset
+    };
+    const newEnd = {
+      col: end.col + colOffset,
+      row: end.row + rowOffset
+    };
+    
+    this.selectionManager.ranges = [{ start: newStart, end: newEnd }];
+    this.selectionManager.selectionAnchor = newStart;
+    this.selectionManager.setActiveCell(newStart);
+    this.selectionManager.render();
+    this.selectionManager._notifySelectionChange();
+  }
+
+  /**
+   * Helper to build a cell ID string (e.g., "A1") from coordinates.
+   * @param {number} row - 1-based row index
+   * @param {number} col - 0-based column index
+   */
+  _buildCellId(row, col) {
+    const colLetter = String.fromCharCode(65 + col);
+    return `${colLetter}${row}`;
+  }
 }
+
+

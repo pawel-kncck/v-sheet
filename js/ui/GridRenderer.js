@@ -398,4 +398,95 @@ export class GridRenderer {
       this.rowHeadersContainer.scrollTop = this.cellGridContainer.scrollTop;
     });
   }
+
+  /**
+   * Displays the drag ghost element matching the dimensions of the selected range.
+   * @param {Object} range - { start: {col, row}, end: {col, row} }
+   */
+  showDragGhost(range) {
+    // 1. Calculate Geometry
+    const minCol = Math.min(range.start.col, range.end.col);
+    const maxCol = Math.max(range.start.col, range.end.col);
+    const minRow = Math.min(range.start.row, range.end.row);
+    const maxRow = Math.max(range.start.row, range.end.row);
+
+    let width = 0;
+    for (let c = minCol; c <= maxCol; c++) {
+      width += this.columnWidths[c] || this.DEFAULT_COL_WIDTH;
+    }
+
+    let height = 0;
+    // Note: rowHeights is 0-indexed (row 1 = index 0)
+    for (let r = minRow; r <= maxRow; r++) {
+      height += this.rowHeights[r - 1] || this.DEFAULT_ROW_HEIGHT;
+    }
+
+    // Calculate initial top/left relative to the scrollable grid area
+    let top = 0;
+    for (let r = 1; r < minRow; r++) {
+      top += this.rowHeights[r - 1] || this.DEFAULT_ROW_HEIGHT;
+    }
+
+    let left = 0;
+    for (let c = 0; c < minCol; c++) {
+      left += this.columnWidths[c] || this.DEFAULT_COL_WIDTH;
+    }
+
+    // Adjust for current scroll position to make it appear exactly over the source
+    const gridRect = this.cellGridContainer.getBoundingClientRect();
+    const containerRect = this.container.getBoundingClientRect();
+    
+    // The ghost is appended to this.container (the main wrapper), so we calculate 
+    // offsets relative to that.
+    // Offset = (Grid Screen Pos - Container Screen Pos) + (Cell Logic Pos - Scroll)
+    const originX = (gridRect.left - containerRect.left) + (left - this.cellGridContainer.scrollLeft);
+    const originY = (gridRect.top - containerRect.top) + (top - this.cellGridContainer.scrollTop);
+
+    // 2. Create or Reuse Element
+    let ghost = this.container.querySelector('#drag-ghost');
+    if (!ghost) {
+      ghost = document.createElement('div');
+      ghost.id = 'drag-ghost';
+      this.container.appendChild(ghost);
+    }
+
+    // 3. Apply Styles
+    ghost.style.width = `${width}px`;
+    ghost.style.height = `${height}px`;
+    ghost.style.left = `${originX}px`;
+    ghost.style.top = `${originY}px`;
+    ghost.style.display = 'block';
+    ghost.style.transform = 'translate(0, 0)'; // Reset transform
+
+    // Store origin for update calculations
+    this._dragOrigin = { x: originX, y: originY };
+  }
+
+  /**
+   * Updates the position of the drag ghost based on mouse movement.
+   * @param {number} deltaX - Change in X (pixels)
+   * @param {number} deltaY - Change in Y (pixels)
+   */
+  updateDragGhost(deltaX, deltaY) {
+    const ghost = this.container.querySelector('#drag-ghost');
+    if (ghost) {
+      // Using translate is more performant than updating top/left
+      ghost.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    }
+  }
+
+  /**
+   * Hides and cleans up the drag ghost.
+   */
+  hideDragGhost() {
+    const ghost = this.container.querySelector('#drag-ghost');
+    if (ghost) {
+      ghost.style.display = 'none';
+      // Reset position to avoid flicker on next show
+      ghost.style.top = '0px';
+      ghost.style.left = '0px';
+    }
+    this._dragOrigin = null;
+  }
 }
+

@@ -70,16 +70,35 @@ clear() {
 }
 
 /**
-   * Checks if the given cell coordinates are on the border of any selected range.
-   * @param {Object} coords - { row, col }
-   * @returns {string} 'grab' if on border, 'default' otherwise
+   * Checks if the mouse is hovering over the border of the selection.
+   * @param {Object} coords - { row, col } of the hovered cell
+   * @param {MouseEvent} event - The mousemove event
+   * @param {HTMLElement} cellElement - The DOM element for the cell
+   * @returns {string} 'grab' or 'default'
    */
-  getCursorForCell(coords) {
-    // If no ranges or cell is not selected, default
+  getCursorForCell(coords, event, cellElement) {
     const cellId = this._coordsToCellId(coords);
+    
+    // Quick check: if cell isn't selected, we don't care
     if (!this.getSelectedCellIds().includes(cellId)) return 'default';
 
-    // Check each range
+    // Get visual bounds of the cell
+    const rect = cellElement.getBoundingClientRect();
+    const x = event.clientX;
+    const y = event.clientY;
+    const THRESHOLD = 5; // 5px buffer zone
+
+    // Check proximity to edges
+    const nearTop = Math.abs(y - rect.top) <= THRESHOLD;
+    const nearBottom = Math.abs(y - rect.bottom) <= THRESHOLD;
+    const nearLeft = Math.abs(x - rect.left) <= THRESHOLD;
+    const nearRight = Math.abs(x - rect.right) <= THRESHOLD;
+
+    // If not near any edge, it's a normal pointer (user can click to select inside)
+    if (!nearTop && !nearBottom && !nearLeft && !nearRight) return 'default';
+
+    // Now check if the edge we are near is actually a selection boundary
+    // We iterate all ranges to see if this cell is an edge cell for any of them
     for (const range of this.ranges) {
       const { start, end } = range;
       const minCol = Math.min(start.col, end.col);
@@ -87,18 +106,22 @@ clear() {
       const minRow = Math.min(start.row, end.row);
       const maxRow = Math.max(start.row, end.row);
 
-      // Check if on border
-      const onTop = coords.row === minRow;
-      const onBottom = coords.row === maxRow;
-      const onLeft = coords.col === minCol;
-      const onRight = coords.col === maxCol;
-
-      if ((onTop || onBottom || onLeft || onRight) && 
-          coords.col >= minCol && coords.col <= maxCol && 
+      // Check if current cell is within this range
+      if (coords.col >= minCol && coords.col <= maxCol && 
           coords.row >= minRow && coords.row <= maxRow) {
-        return 'grab';
+        
+        // Valid Grab conditions:
+        // 1. Near Top AND cell is top row of range
+        if (nearTop && coords.row === minRow) return 'grab';
+        // 2. Near Bottom AND cell is bottom row of range
+        if (nearBottom && coords.row === maxRow) return 'grab';
+        // 3. Near Left AND cell is left col of range
+        if (nearLeft && coords.col === minCol) return 'grab';
+        // 4. Near Right AND cell is right col of range
+        if (nearRight && coords.col === maxCol) return 'grab';
       }
     }
+
     return 'default';
   }
 
@@ -223,6 +246,89 @@ clear() {
     if (this.callbacks.onActiveCellChange) {
       const cellId = this._coordsToCellId(coords);
       this.callbacks.onActiveCellChange(cellId, coords);
+    }
+  }
+
+  /**
+   * Jumps to the edge of the data region.
+   * @param {string} direction - 'up', 'down', 'left', 'right'
+   * @param {Function} hasValue - Function(cellId) -> boolean. Returns true if cell has data.
+   */
+  jumpToEdge(direction, hasValue) {
+    if (!this.activeCell) return;
+
+    let { row, col } = this.activeCell;
+    const startHasValue = hasValue(this._coordsToCellId({ row, col }));
+
+    // Define the step for each direction
+    const step = {
+      up: { r: -1, c: 0 },
+      down: { r: 1, c: 0 },
+      left: { r: 0, c: -1 },
+      right: { r: 0, c: 1 }
+    }[direction];
+
+    // Helper to check if a coordinate is within bounds
+    const isValid = (r, c) => r >= 1 && r <= this.ROWS && c >= 0 && c < this.COLS;
+
+    // Peek at the immediate neighbor
+    let nextR = row + step.r;
+    let nextC = col + step.c;
+
+    if (!isValid(nextR, nextC)) return; // Already at edge
+
+    const neighborHasValue = hasValue(this._coordsToCellId({ row: nextR, col: nextC }));
+
+    // LOGIC:
+    // 1. If we are on data and neighbor is data -> Keep going until we hit empty or edge.
+    // 2. If we are on data and neighbor is empty -> Keep going until we hit data or edge.
+    // 3. If we are on empty -> Keep going until we hit data or edge.
+    
+    // If we are starting on a value, and the immediate neighbor is empty, 
+    // we want to jump across the gap to the next value. 
+    // Otherwise, we are moving along a contiguous block (of values or empties).
+    const lookForValue = startHasValue && !neighborHasValue ? true : startHasValue;
+
+    while (isValid(nextR, nextC)) {
+      const currentId = this._coordsToCellId({ row: nextR, col: nextC });
+      const currentIsValue = hasValue(currentId);
+
+      // Stop conditions
+      if (startHasValue) {
+        if (neighborHasValue) {
+           // Case 1: Contiguous Block. Stop if we hit empty.
+           if (!currentIsValue) {
+             // Step back one to stay on the last value
+             nextR -= step.r;
+             nextC -= step.c;
+             break;
+           }
+        } else {
+           // Case 2: Jumping Gap. Stop if we hit value.
+           if (currentIsValue) break;
+        }
+      } else {
+        // Case 3: Starting on empty. Stop if we hit value.
+        if (currentIsValue) break;
+      }
+
+      // If this is the very last valid cell in this direction, stop here
+      if (!isValid(nextR + step.r, nextC + step.c)) break;
+
+      // Keep moving
+      nextR += step.r;
+      nextC += step.c;
+    }
+
+    // Perform the move
+    const newCoords = { row: nextR, col: nextC };
+    this.setActiveCell(newCoords);
+    this.selectCell(newCoords, false, false);
+    
+    // Scroll into view
+    const cellElement = this.gridRenderer.getCellElementByCoords(nextR, nextC);
+    if (cellElement) {
+      this.gridRenderer.scrollCellIntoView(cellElement);
     }
   }
 
