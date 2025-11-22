@@ -69,6 +69,39 @@ clear() {
   this.gridRenderer.clearAllHighlights();
 }
 
+/**
+   * Checks if the given cell coordinates are on the border of any selected range.
+   * @param {Object} coords - { row, col }
+   * @returns {string} 'grab' if on border, 'default' otherwise
+   */
+  getCursorForCell(coords) {
+    // If no ranges or cell is not selected, default
+    const cellId = this._coordsToCellId(coords);
+    if (!this.getSelectedCellIds().includes(cellId)) return 'default';
+
+    // Check each range
+    for (const range of this.ranges) {
+      const { start, end } = range;
+      const minCol = Math.min(start.col, end.col);
+      const maxCol = Math.max(start.col, end.col);
+      const minRow = Math.min(start.row, end.row);
+      const maxRow = Math.max(start.row, end.row);
+
+      // Check if on border
+      const onTop = coords.row === minRow;
+      const onBottom = coords.row === maxRow;
+      const onLeft = coords.col === minCol;
+      const onRight = coords.col === maxCol;
+
+      if ((onTop || onBottom || onLeft || onRight) && 
+          coords.col >= minCol && coords.col <= maxCol && 
+          coords.row >= minRow && coords.row <= maxRow) {
+        return 'grab';
+      }
+    }
+    return 'default';
+  }
+
   /**
    * Selects a cell, handling shift/cmd modifiers.
    * @param {Object} coords - { row, col }

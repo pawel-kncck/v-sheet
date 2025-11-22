@@ -217,7 +217,19 @@ class FormulaBar {
       // Click handler to load file
       fileItem.addEventListener('click', async () => {
         try {
-          // FIX 1: Get the FRESH current ID, not a stale closure variable
+          // If the user is currently editing a formula or cell, commit it NOW 
+          // while the FileManager is still pointing to the OLD file.
+          if (this.isEditingFormula) {
+             this.commitFormula(); 
+          }
+          // We also need to check if the main grid editor is active. 
+          // Since we don't have direct access to EditorManager here, we rely on 
+          // the blur event happening naturally, BUT we must ensure the File load 
+          // waits for the event loop to clear.
+          
+          // Delay actual switch slightly to allow blur/commit events to fire on the OLD file
+          await new Promise(resolve => setTimeout(resolve, 0));
+          
           const currentId = this.fileManager.getCurrentFileId();
 
           if (file.id !== currentId) {

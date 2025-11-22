@@ -174,6 +174,14 @@ export class Spreadsheet {
       this.selectionManager.selectHeader(type, index, event.shiftKey, event.metaKey || event.ctrlKey);
     });
 
+    this.renderer.on('headerMouseMove', ({ type, event }) => {
+      const target = event.target.closest('.header-cell');
+      if (target) {
+        const cursor = this.resizer.getCursorForHeader(target, event);
+        target.style.cursor = cursor;
+      }
+    });
+
     // 3. Resizing
     this.renderer.on('headerMouseDown', ({ type, event }) => {
       this.renderer.cellGridContainer.focus()
@@ -345,6 +353,7 @@ export class Spreadsheet {
     if (key.length === 1 && !isCmd && !e.altKey) {
       const activeId = this.selectionManager.getActiveCellId();
       if (activeId) {
+        e.preventDefault();
         this.editor.startEdit(activeId, '', key); // Start empty, pass trigger key
       }
     }
