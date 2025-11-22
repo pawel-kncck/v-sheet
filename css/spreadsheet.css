@@ -16,6 +16,75 @@ body {
   overflow: hidden;
 }
 
+/* ==================== TOOLBAR STYLES ==================== */
+#toolbar-container {
+  height: 40px;
+  background-color: #f9fbfd; /* Light grey/blue tint */
+  border-bottom: 1px solid #dadce0;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 4px;
+  flex-shrink: 0;
+  border-radius: 24px 24px 0 0; /* Optional: Rounded top corners like GSheets */
+  margin: 6px 6px 0 6px; /* Floating look */
+}
+
+.toolbar-btn {
+  width: 30px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #444746;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.toolbar-btn:hover {
+  background-color: #e8eaed;
+}
+
+.toolbar-btn.active {
+  background-color: #d3e3fd;
+  color: #0b57d0;
+}
+
+.toolbar-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.toolbar-separator {
+  width: 1px;
+  height: 18px;
+  background-color: #dadce0;
+  margin: 0 6px;
+}
+
+/* Tooltip (Simple pure CSS) */
+.toolbar-btn[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  background: #333;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+}
+
 /* ==================== FORMULA BAR STYLES ==================== */
 
 #formula-bar-container {
@@ -468,6 +537,7 @@ body {
 #cell-grid::-webkit-scrollbar-corner {
   background: #f1f1f1;
 }
+
 
 /* Utility classes */
 .hidden {

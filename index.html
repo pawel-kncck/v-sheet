@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/spreadsheet.css" />
   </head>
   <body>
+    <div id="toolbar-container"></div>
     <!-- Formula bar container -->
     <div id="formula-bar-container">
       <!-- File selector dropdown -->
@@ -106,6 +107,7 @@
       import { FileManager } from './js/file-manager.js';
       import { FormulaBar } from './js/formula-bar.js';
       import { Spreadsheet } from './js/spreadsheet.js';
+      import { Toolbar } from './js/ui/Toolbar.js';
 
       let fileManager;
       let formulaBar;
@@ -169,6 +171,10 @@
             if (initialized) {
               // Only create formula bar after file manager is ready
               formulaBar = new FormulaBar(fileManager, spreadsheet);
+
+              // 2. Initialize Toolbar
+              const toolbarContainer = document.getElementById('toolbar-container');
+              const toolbar = new Toolbar(toolbarContainer, spreadsheet);
 
               // Connect components
               spreadsheet.setFileManager(fileManager);

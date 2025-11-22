@@ -40,7 +40,6 @@ export class Spreadsheet {
     this.editor = new EditorManager(this.renderer);
     
     // Data Layer
-    // We pass a getter so ClipboardManager can lazy-load values
     this.clipboardManager = new ClipboardManager(this.renderer, (cellId) => {
       return this.fileManager ? this.fileManager.getRawCellValue(cellId) : '';
     });
@@ -56,7 +55,7 @@ export class Spreadsheet {
     this._onDragMouseMove = this._onDragMouseMove.bind(this);
     this._onDragMouseUp = this._onDragMouseUp.bind(this);
 
-    // External Dependencies (injected via setters later)
+    // External Dependencies
     this.fileManager = null;
     this.formulaBar = null;
     this.formulaWorker = formulaWorker;
@@ -72,42 +71,26 @@ export class Spreadsheet {
     Logger.log('Spreadsheet', 'Coordinator initialized');
   }
 
-  // ==========================================================================
-  // PUBLIC API
-  // ==========================================================================
-
   setFileManager(fileManager) {
     this.fileManager = fileManager;
   }
 
   setFormulaBar(formulaBar) {
     this.formulaBar = formulaBar;
-    // Sync initial state
     if (this.selectionManager.activeCell) {
       this._updateFormulaBar();
     }
   }
 
-  /**
-   * Loads data from a file object.
-   * Delegates to modules to reset their state.
-   */
   loadFromFile(fileData) {
     if (!fileData) return;
 
-    // 1. Reset History
     this.historyManager.clear();
-
-    // 2. Reset Modules
     this.selectionManager.clear();
-    // We intentionally don't clear clipboard on file load (allows copy-paste between files)
 
-    // Explicitly clear all visual cell content to prevent "ghost" data
-    // from the previous file persisting in the DOM.
     const cells = this.renderer.cellGridContainer.querySelectorAll('.cell');
     cells.forEach(cell => cell.textContent = '');
 
-    // 3. Apply Structure (Widths/Heights)
     if (fileData.columnWidths) {
       this.renderer.setColumnWidths(fileData.columnWidths);
     }
@@ -115,9 +98,6 @@ export class Spreadsheet {
       this.renderer.setRowHeights(fileData.rowHeights);
     }
 
-    // 4. Load Data into Worker
-    // The worker will calculate values and send back an 'updates' message
-    // which triggers renderer.updateCellContent()
     if (this.formulaWorker) {
       this.formulaWorker.postMessage({
         type: 'load',
@@ -125,7 +105,6 @@ export class Spreadsheet {
       });
     }
 
-    // 5. Restore Metadata (Selection)
     if (fileData.metadata?.lastActiveCell) {
       const coords = this._cellIdToCoords(fileData.metadata.lastActiveCell);
       if (coords) {
@@ -134,65 +113,50 @@ export class Spreadsheet {
     }
   }
 
-  /**
-   * Clears the spreadsheet (e.g. for "New File")
-   */
   clear() {
-    // Clear DOM
-    this.renderer.createGrid(); // Re-creates empty grid
-    
-    // Clear State
+    this.renderer.createGrid();
     this.selectionManager.clear();
     this.historyManager.clear();
-    this.selectionManager.selectCell({ row: 1, col: 0 }); // Reset to A1
+    this.selectionManager.selectCell({ row: 1, col: 0 });
   }
 
   // ==========================================================================
-  // EVENT WIRING (The "Glue")
+  // EVENT WIRING
   // ==========================================================================
 
   _setupEventWiring() {
-    // --- GridRenderer Events ---
-    
     // 1. Cell Selection (Click / Drag)
     this.renderer.on('cellMouseDown', ({ cellElement, event }) => {
       this.renderer.cellGridContainer.focus()
-      if (this.editor.isEditing) return; // Don't select if editing
-      if (this.resizer.isResizing) return; // Don't select while resizing
+      if (this.editor.isEditing) return;
+      if (this.resizer.isResizing) return;
       
       const coords = this._getCellCoordsFromElement(cellElement);
 
-      // --- NEW DRAG LOGIC START ---
       const cursor = this.selectionManager.getCursorForCell(coords, event, cellElement);
       
       if (cursor === 'grab') {
         this.isDraggingCells = true;
         
-        // Get the active selection range
         const ranges = this.selectionManager.ranges;
         const activeRange = ranges[ranges.length - 1];
 
-        // Store drag start data
         this.dragInfo = {
           startX: event.clientX,
           startY: event.clientY,
-          startCoords: coords, // Store the exact cell we clicked
+          startCoords: coords, 
           selection: activeRange
         };
 
-        // Show visual ghost
         this.renderer.showDragGhost(activeRange);
 
-        // Attach global listeners
         window.addEventListener('mousemove', this._onDragMouseMove);
         window.addEventListener('mouseup', this._onDragMouseUp, { once: true });
         
-        return; // Stop! Do not re-select the cell we just clicked
+        return;
       }
       
-      // Right click? Just select single cell if not in current selection
       if (event.button === 2) {
-        // Context menu logic would go here
         return; 
       }
 
@@ -209,7 +173,6 @@ export class Spreadsheet {
       if (event.buttons === 1) {
         this.selectionManager.selectCell(coords, true, false);
       } else {
-        // PASS EXTRA ARGS HERE
         const cursor = this.selectionManager.getCursorForCell(coords, event, cellElement);
         cellElement.style.cursor = cursor;
       }
@@ -223,7 +186,8 @@ export class Spreadsheet {
 
     // 2. Header Selection
     this.renderer.on('headerClick', ({ type, index, event }) => {
-      if (this.resizer.isResizing) return;
+      // FIX: Bug 3 - Don't select if we just finished resizing
+      if (this.resizer.isResizing || this.resizer.justFinishedResizing) return;
       this.selectionManager.selectHeader(type, index, event.shiftKey, event.metaKey || event.ctrlKey);
     });
 
@@ -237,20 +201,16 @@ export class Spreadsheet {
     });
 
     // 3. Resizing
-
     this.renderer.on('headerMouseDown', ({ type, event }) => {
       this.renderer.cellGridContainer.focus()
       const target = event.target.closest('.header-cell');
       const cursor = this.resizer.getCursorForHeader(target, event);
       
       if (cursor !== 'default') {
-        // Stop the browser from treating this mousedown/mouseup sequence as a "click"
         event.preventDefault(); 
         event.stopPropagation();
         let index = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
         
-        // FIX: Row headers are 1-based in DOM (1,2,3) but 0-based in logic arrays.
-        // If we don't subtract 1, resizing Row 2 (index 1) effectively targets Row 3 (index 2).
         if (type === 'row') {
             index = index - 1;
         }
@@ -258,36 +218,23 @@ export class Spreadsheet {
         const currentSizes = type === 'col' ? this.renderer.columnWidths : this.renderer.rowHeights;
         this.resizer.startResize(type, [index], currentSizes, event);
       } else {
-        // Selection logic... (ensure index fix is applied here too if needed, though SelectionManager handles 0 vs 1 internally mostly)
         const rawIndex = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
-        // SelectionManager expects 0-based index for both?
-        // Check SelectionManager.js: selectHeader(type, index) -> row: index
-        // It seems SelectionManager expects 1-based for row? 
-        // "start = { col: 0, row: index };" -> setActiveCell({row, col})
-        // Grid uses 1-based rows. So for selection, rawIndex is correct.
         this.selectionManager.selectHeader(type, rawIndex, event.shiftKey, event.metaKey || event.ctrlKey);
       }
     });
 
-   // --- NEW: Resizer Event Wiring ---
-
-    // 1. Show Guide
+    // Resizer Events
     this.resizer.on('resizeStart', ({ type, index }) => {
         this.renderer.showResizeGuide(type, index);
     });
 
-    // 2. Update Guide (Don't resize grid live anymore)
     this.resizer.on('resizeUpdate', ({ type, delta }) => {
-        // OLD: this.renderer.setColumnWidths(...)
-        // NEW: Just move the line
         this.renderer.updateResizeGuide(type, delta);
     });
 
-    // 3. Commit Change (Command + Hide Guide)
     this.resizer.on('resizeEnd', ({ type, finalSizes }) => {
         this.renderer.hideResizeGuide();
 
-        // Prepare data for Command
         const oldSizes = {};
         const indices = Object.keys(finalSizes).map(k => parseInt(k, 10));
         
@@ -296,22 +243,20 @@ export class Spreadsheet {
             else oldSizes[idx] = this.renderer.rowHeights[idx];
         });
 
-        // Execute Command
         const command = new ResizeCommand({
             type,
             indices,
             newSizes: finalSizes,
             oldSizes,
             fileManager: this.fileManager,
-            renderer: this.renderer // Pass renderer to command
+            renderer: this.renderer
         });
 
         this.historyManager.execute(command);
         this.renderer.cellGridContainer.focus();
     });
 
-     // --- SelectionManager Events ---
-
+    // SelectionManager Events
     this.selectionManager.on('activeCellChange', (cellId) => {
       this._updateFormulaBar();
       this._updateMetadata();
@@ -321,22 +266,18 @@ export class Spreadsheet {
       this._updateMetadata();
     });
     
-    // --- EditorManager Events ---
-
+    // EditorManager Events
     this.editor.on('commit', ({ cellId, value, moveDirection }) => {
       this._executeCellUpdate(cellId, value);
       
-      // Handle post-edit navigation
       if (moveDirection === 'down') this.selectionManager.moveSelection('down');
       else if (moveDirection === 'right') this.selectionManager.moveSelection('right');
       
-      // Refocus grid
       this.renderer.cellGridContainer.focus();
     });
 
-    // --- Global Keyboard Events ---
-    
-    this.renderer.cellGridContainer.tabIndex = 0; // Ensure focusable
+    // Global Keyboard Events
+    this.renderer.cellGridContainer.tabIndex = 0;
     this.renderer.cellGridContainer.addEventListener('keydown', (e) => {
       this._handleGlobalKeydown(e);
     });
@@ -349,7 +290,6 @@ export class Spreadsheet {
       const { type, payload } = event.data;
 
       if (type === 'updates') {
-        // Batch update the DOM
         Object.entries(payload.updates).forEach(([cellId, value]) => {
           this.renderer.updateCellContent(cellId, value);
         });
@@ -359,8 +299,6 @@ export class Spreadsheet {
     };
   }
 
-
-
   // ==========================================================================
   // DRAG AND DROP HANDLERS
   // ==========================================================================
@@ -368,36 +306,60 @@ export class Spreadsheet {
   _onDragMouseMove(e) {
     if (!this.isDraggingCells) return;
 
-    // 1. Find the cell currently under the mouse
-    // We hide the ghost momentarily so elementFromPoint sees the cell below it, not the ghost
     const ghost = document.getElementById('drag-ghost');
     if (ghost) ghost.style.display = 'none';
     
     const targetElement = document.elementFromPoint(e.clientX, e.clientY);
     const targetCell = targetElement ? targetElement.closest('.cell') : null;
     
-    if (ghost) ghost.style.display = 'block'; // Show ghost again
+    if (ghost) ghost.style.display = 'block';
 
-    // 2. Calculate Snap Delta
     if (targetCell) {
-      const startCoords = this.dragInfo.startCoords; // {row, col} where we clicked
+      const startCoords = this.dragInfo.startCoords; 
       const currentCoords = this._getCellCoordsFromElement(targetCell);
 
-      // Calculate grid-based offset (e.g., moved 2 cols right, 1 row down)
       const colDiff = currentCoords.col - startCoords.col;
       const rowDiff = currentCoords.row - startCoords.row;
 
-      // Don't update if we haven't moved to a new cell
-      if (colDiff === 0 && rowDiff === 0) {
-        this.renderer.updateDragGhost(0, 0);
-        return;
+      // FIX: Bug 1 - Update Ghost Size
+      const { selection } = this.dragInfo;
+      
+      // Calculate range dimensions in cells
+      const rangeWidthCells = Math.abs(selection.end.col - selection.start.col);
+      const rangeHeightCells = Math.abs(selection.end.row - selection.start.row);
+      
+      // Calculate target range bounds
+      const targetStartCol = selection.start.col + colDiff;
+      const targetStartRow = selection.start.row + rowDiff;
+      const targetEndCol = targetStartCol + rangeWidthCells;
+      const targetEndRow = targetStartRow + rangeHeightCells;
+
+      // Sum pixel widths
+      let newWidthPx = 0;
+      for(let c = targetStartCol; c <= targetEndCol; c++) {
+          if (c >= 0 && c < this.config.cols) {
+              newWidthPx += (this.renderer.columnWidths[c] || this.config.defaultColWidth);
+          }
       }
 
-      // 3. Calculate Pixel Delta based on Cell Positions
-      // We find the Start Cell Element and the Current Target Cell Element
-      // and measure the physical distance between their top-left corners.
+      // Sum pixel heights
+      let newHeightPx = 0;
+      for(let r = targetStartRow; r <= targetEndRow; r++) {
+          // Rows are 1-based in logic but 0-based in heights array
+          // renderer.rowHeights[0] corresponds to Row 1
+          if (r >= 1 && r <= this.config.rows) {
+              newHeightPx += (this.renderer.rowHeights[r - 1] || this.config.defaultRowHeight);
+          }
+      }
+
+      // Update Ghost DOM
+      if (ghost && newWidthPx > 0 && newHeightPx > 0) {
+          ghost.style.width = `${newWidthPx}px`;
+          ghost.style.height = `${newHeightPx}px`;
+      }
+
+      // Move Ghost
       const startCellEl = this.renderer.getCellElementByCoords(startCoords.row, startCoords.col);
-      
       if (startCellEl && targetCell) {
         const startRect = startCellEl.getBoundingClientRect();
         const targetRect = targetCell.getBoundingClientRect();
@@ -414,8 +376,6 @@ export class Spreadsheet {
     if (!this.isDraggingCells) return;
 
     try {
-      // 1. Find the cell under the mouse cursor
-      // We hide the ghost first to ensure elementFromPoint sees the cell below it
       this.renderer.hideDragGhost();
       
       const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
@@ -425,19 +385,15 @@ export class Spreadsheet {
         const dropCoords = this._getCellCoordsFromElement(cell);
         const { selection, startCoords } = this.dragInfo;
 
-        // Safety check: ensure we have startCoords (prevent crash if drag start failed)
         if (!startCoords) {
             console.error('Missing startCoords in dragInfo');
             return;
         }
 
-        // 2. Calculate the offset
         const colOffset = dropCoords.col - startCoords.col;
         const rowOffset = dropCoords.row - startCoords.row;
 
-        // 3. Execute Move (only if we actually moved to a new cell)
         if (colOffset !== 0 || rowOffset !== 0) {
-          // Calculate new top-left for the range
           const newTopLeft = {
             col: selection.start.col + colOffset,
             row: selection.start.row + rowOffset
@@ -449,12 +405,10 @@ export class Spreadsheet {
     } catch (error) {
       console.error('Drag operation failed:', error);
     } finally {
-      // 4. Cleanup - This ALWAYS runs, ensuring the app doesn't get stuck
       this.isDraggingCells = false;
       this.dragInfo = {};
       window.removeEventListener('mousemove', this._onDragMouseMove);
       
-      // Reset cursor
       if (this.renderer && this.renderer.cellGridContainer) {
         this.renderer.cellGridContainer.style.cursor = 'default';
       }
@@ -466,13 +420,12 @@ export class Spreadsheet {
   // ==========================================================================
 
   _handleGlobalKeydown(e) {
-    if (this.editor.isEditing) return; // Let EditorManager handle it
+    if (this.editor.isEditing) return; 
 
     const key = e.key;
     const isCmd = e.metaKey || e.ctrlKey;
     const isShift = e.shiftKey;
 
-    // 1. History (Undo/Redo)
     if (isCmd && key.toLowerCase() === 'z') {
       e.preventDefault();
       if (isShift) this.historyManager.redo();
@@ -485,7 +438,6 @@ export class Spreadsheet {
       return;
     }
 
-    // 2. Clipboard
     if (isCmd && key.toLowerCase() === 'c') {
       e.preventDefault();
       this.clipboardManager.copy(this.selectionManager.ranges);
@@ -497,13 +449,11 @@ export class Spreadsheet {
       return;
     }
 
-    // 3. Navigation (Arrows)
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
       e.preventDefault();
       const direction = key.replace('Arrow', '').toLowerCase();
       
       if (isCmd) {
-        // Pass the direction AND a way to check data (for finding edges)
         this.selectionManager.jumpToEdge(direction, (cellId) => {
             const val = this.fileManager.getRawCellValue(cellId);
             return val !== '' && val !== null && val !== undefined;
@@ -514,7 +464,6 @@ export class Spreadsheet {
       return;
     }
 
-    // 4. Editing
     if (key === 'Enter') {
       e.preventDefault();
       const activeId = this.selectionManager.getActiveCellId();
@@ -531,13 +480,11 @@ export class Spreadsheet {
       return;
     }
 
-    // 5. Type to overwrite
-    // If it's a printable character and no special modifiers
     if (key.length === 1 && !isCmd && !e.altKey) {
       const activeId = this.selectionManager.getActiveCellId();
       if (activeId) {
         e.preventDefault();
-        this.editor.startEdit(activeId, '', key); // Start empty, pass trigger key
+        this.editor.startEdit(activeId, '', key); 
       }
     }
   }
@@ -545,7 +492,6 @@ export class Spreadsheet {
   _executeCellUpdate(cellId, newValue) {
     const oldValue = this.fileManager.getRawCellValue(cellId);
     
-    // Don't update if no change (optimization)
     if (newValue === oldValue) return;
 
     const command = new UpdateCellsCommand({
@@ -561,18 +507,15 @@ export class Spreadsheet {
     const activeCellCoords = this.selectionManager.activeCell;
     if (!activeCellCoords) return;
 
-    // Get calculations from ClipboardManager
     const updates = this.clipboardManager.getPasteUpdates(activeCellCoords);
     if (updates.length === 0) return;
 
-    // Hydrate updates with oldValues for Undo
     const cellUpdates = updates.map(update => ({
       cellId: update.cellId,
       newValue: update.value,
       oldValue: this.fileManager.getRawCellValue(update.cellId)
     }));
 
-    // Execute unified command
     const command = new UpdateCellsCommand({
       cellUpdates,
       fileManager: this.fileManager,
@@ -642,7 +585,6 @@ export class Spreadsheet {
     };
   }
   
-  // Interface methods required by FormulaBar/Legacy
   setCellValue(cellId, value) {
     this._executeCellUpdate(cellId, value);
   }
@@ -653,7 +595,6 @@ export class Spreadsheet {
   }
   
   getCellValue(cellId) {
-    // Used by formula bar cancel
     return this.fileManager.getRawCellValue(cellId);
   }
 
@@ -676,14 +617,14 @@ export class Spreadsheet {
       }
     }
 
-    if (movedData.length === 0) return; // Nothing to move
+    if (movedData.length === 0) return;
 
     // 2. Collect data being overwritten at destination
+    // FIX: Bug 2 - Capture ALL target cell states, even if empty
     const overwrittenData = [];
     const targetMinCol = targetTopLeft.col;
     const targetMinRow = targetTopLeft.row;
     
-    // Calculate destination bounds
     const width = maxCol - minCol;
     const height = maxRow - minRow;
 
@@ -691,13 +632,11 @@ export class Spreadsheet {
       for (let row = targetMinRow; row <= targetMinRow + height; row++) {
         const cellId = this._buildCellId(row, col);
         const value = this.fileManager.getRawCellValue(cellId);
-        if (value !== undefined && value !== '') {
-          overwrittenData.push({ cellId, value });
-        }
+        // We store the value, defaulting to '' if undefined, so Undo can restore the "empty" state
+        overwrittenData.push({ cellId, value: value || '' });
       }
     }
 
-    // 3. Create and execute command
     const command = new MoveRangeCommand({
       sourceRange: { minCol, maxCol, minRow, maxRow },
       targetTopLeft,
@@ -709,7 +648,6 @@ export class Spreadsheet {
 
     this.historyManager.execute(command);
 
-    // 4. Update selection to follow the moved data
     const newStart = {
       col: start.col + colOffset,
       row: start.row + rowOffset
@@ -726,15 +664,8 @@ export class Spreadsheet {
     this.selectionManager._notifySelectionChange();
   }
 
-  /**
-   * Helper to build a cell ID string (e.g., "A1") from coordinates.
-   * @param {number} row - 1-based row index
-   * @param {number} col - 0-based column index
-   */
   _buildCellId(row, col) {
     const colLetter = String.fromCharCode(65 + col);
     return `${colLetter}${row}`;
   }
 }
-
-

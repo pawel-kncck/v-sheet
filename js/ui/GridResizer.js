@@ -12,6 +12,7 @@ export class GridResizer {
 
     // State
     this.isResizing = false;
+    this.justFinishedResizing = false;
     this.resizeInfo = null; 
     // Structure: { type: 'col'|'row', indices: [], startPos: number, originalSizes: {} }
 
@@ -121,6 +122,13 @@ export class GridResizer {
 
     this.isResizing = false;
     this.resizeInfo = null;
+
+    // <--- FIX: Prevent immediate click events from selecting headers
+    this.justFinishedResizing = true;
+    setTimeout(() => {
+      this.justFinishedResizing = false;
+    }, 50);
+    
     Logger.log('GridResizer', 'Resize operation completed');
   }
 
