@@ -488,5 +488,80 @@ export class GridRenderer {
     }
     this._dragOrigin = null;
   }
+
+  // ... existing methods ...
+
+  /**
+   * Shows the resize guide line at the specified start position.
+   * @param {string} type - 'col' or 'row'
+   * @param {number} index - Index of the row/col being resized
+   */
+  showResizeGuide(type, index) {
+    let guide = this.container.querySelector('.resize-guide');
+    if (!guide) {
+      guide = document.createElement('div');
+      guide.className = 'resize-guide';
+      this.container.appendChild(guide);
+    }
+
+    // Reset classes
+    guide.className = `resize-guide ${type}`;
+    
+    // Calculate initial position based on grid dimensions
+    // We need to sum widths/heights up to the current index + 1 (the right/bottom edge)
+    let position = 0;
+    
+    if (type === 'col') {
+        // Sum widths up to this column
+        // Header area offset: 46px (row headers width)
+        position = 46; 
+        for(let i=0; i <= index; i++) {
+            position += this.columnWidths[i];
+        }
+        guide.style.left = `${position}px`;
+        guide.style.top = '0px';
+        guide.style.transform = 'translateX(0)';
+    } else {
+        // Sum heights up to this row
+        // Header area offset: 24px (column headers height)
+        position = 24;
+        for(let i=0; i <= index; i++) {
+            position += this.rowHeights[i];
+        }
+        guide.style.top = `${position}px`;
+        guide.style.left = '0px';
+        guide.style.transform = 'translateY(0)';
+    }
+
+    guide.style.display = 'block';
+    this._guideStartPos = position;
+  }
+
+  /**
+   * Updates the visual position of the resize guide.
+   * @param {string} type - 'col' or 'row'
+   * @param {number} delta - Pixel offset from start
+   */
+  updateResizeGuide(type, delta) {
+    const guide = this.container.querySelector('.resize-guide');
+    if (!guide) return;
+
+    if (type === 'col') {
+        guide.style.transform = `translateX(${delta}px)`;
+    } else {
+        guide.style.transform = `translateY(${delta}px)`;
+    }
+  }
+
+  /**
+   * Hides the resize guide.
+   */
+  hideResizeGuide() {
+    const guide = this.container.querySelector('.resize-guide');
+    if (guide) {
+      guide.style.display = 'none';
+      guide.style.transform = 'none';
+    }
+  }
 }
 

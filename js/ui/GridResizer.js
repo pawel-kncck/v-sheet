@@ -17,8 +17,9 @@ export class GridResizer {
 
     // Callbacks
     this.callbacks = {
-      onResizeUpdate: null, // Called during drag (for visual feedback)
-      onResizeEnd: null     // Called on mouseup (to commit changes)
+      onResizeStart: null,  // <--- ADD THIS LINE
+      onResizeUpdate: null,
+      onResizeEnd: null
     };
 
     // Bind methods for event listeners
@@ -45,6 +46,12 @@ export class GridResizer {
       originalSizes: { ...currentSizes }, // Shallow copy
       startPos: type === 'col' ? event.clientX : event.clientY
     };
+
+    // NEW: Emit start event for the guide
+    // We assume single resize for now (index[0]) for the guide position
+    if (this.callbacks.onResizeStart) {
+        this.callbacks.onResizeStart({ type, index: indices[0] });
+    }
 
     // Attach global listeners to handle dragging outside the header area
     window.addEventListener('mousemove', this._onMouseMove);
@@ -76,9 +83,9 @@ export class GridResizer {
       newSizes[index] = Math.max(limit, originalSize + delta);
     });
 
-    // Emit update for visual feedback
+    // NEW: Emit 'delta' so renderer can move the line
     if (this.callbacks.onResizeUpdate) {
-      this.callbacks.onResizeUpdate({ type, newSizes });
+      this.callbacks.onResizeUpdate({ type, newSizes, delta });
     }
   }
 
@@ -93,7 +100,7 @@ export class GridResizer {
     this._onMouseMove(e);
 
     // Clean up
-    this.isResizing = false;
+    
     window.removeEventListener('mousemove', this._onMouseMove);
     
     // Emit final event to commit changes
@@ -112,6 +119,7 @@ export class GridResizer {
       this.callbacks.onResizeEnd({ type, finalSizes });
     }
 
+    this.isResizing = false;
     this.resizeInfo = null;
     Logger.log('GridResizer', 'Resize operation completed');
   }

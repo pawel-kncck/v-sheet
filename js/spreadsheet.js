@@ -2,6 +2,7 @@
 import { HistoryManager } from './history/HistoryManager.js';
 import { UpdateCellsCommand } from './history/commands/UpdateCellsCommand.js';
 import { MoveRangeCommand } from './history/commands/MoveRangeCommand.js';
+import { ResizeCommand } from './history/commands/ResizeCommand.js';
 import { Logger } from './engine/utils/Logger.js';
 import { CellHelpers } from './engine/utils/CellHelpers.js';
 
@@ -157,6 +158,7 @@ export class Spreadsheet {
     this.renderer.on('cellMouseDown', ({ cellElement, event }) => {
       this.renderer.cellGridContainer.focus()
       if (this.editor.isEditing) return; // Don't select if editing
+      if (this.resizer.isResizing) return; // Don't select while resizing
       
       const coords = this._getCellCoordsFromElement(cellElement);
 
@@ -200,6 +202,7 @@ export class Spreadsheet {
     this.renderer.on('cellMouseOver', ({ cellElement, event }) => {
       if (this.editor.isEditing) return;
       if (this.isDraggingCells) return;
+      if (this.resizer.isResizing) return;
 
       const coords = this._getCellCoordsFromElement(cellElement);
 
@@ -220,10 +223,12 @@ export class Spreadsheet {
 
     // 2. Header Selection
     this.renderer.on('headerClick', ({ type, index, event }) => {
+      if (this.resizer.isResizing) return;
       this.selectionManager.selectHeader(type, index, event.shiftKey, event.metaKey || event.ctrlKey);
     });
 
     this.renderer.on('headerMouseMove', ({ type, event }) => {
+      if (this.resizer.isResizing) return;
       const target = event.target.closest('.header-cell');
       if (target) {
         const cursor = this.resizer.getCursorForHeader(target, event);
@@ -232,29 +237,80 @@ export class Spreadsheet {
     });
 
     // 3. Resizing
+
     this.renderer.on('headerMouseDown', ({ type, event }) => {
       this.renderer.cellGridContainer.focus()
       const target = event.target.closest('.header-cell');
       const cursor = this.resizer.getCursorForHeader(target, event);
       
       if (cursor !== 'default') {
-        // It's a resize interaction
-        const index = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
+        // Stop the browser from treating this mousedown/mouseup sequence as a "click"
+        event.preventDefault(); 
+        event.stopPropagation();
+        let index = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
+        
+        // FIX: Row headers are 1-based in DOM (1,2,3) but 0-based in logic arrays.
+        // If we don't subtract 1, resizing Row 2 (index 1) effectively targets Row 3 (index 2).
+        if (type === 'row') {
+            index = index - 1;
+        }
+
         const currentSizes = type === 'col' ? this.renderer.columnWidths : this.renderer.rowHeights;
-        
-        // Determine which indices are being resized (if multiple selected)
-        const indices = [index]; 
-        // TODO: Add logic to check if `index` is part of a selection group to resize all
-        
-        this.resizer.startResize(type, indices, currentSizes, event);
+        this.resizer.startResize(type, [index], currentSizes, event);
       } else {
-        // It's a selection interaction -> delegate to SelectionManager
-        const index = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
-        this.selectionManager.selectHeader(type, index, event.shiftKey, event.metaKey || event.ctrlKey);
+        // Selection logic... (ensure index fix is applied here too if needed, though SelectionManager handles 0 vs 1 internally mostly)
+        const rawIndex = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
+        // SelectionManager expects 0-based index for both?
+        // Check SelectionManager.js: selectHeader(type, index) -> row: index
+        // It seems SelectionManager expects 1-based for row? 
+        // "start = { col: 0, row: index };" -> setActiveCell({row, col})
+        // Grid uses 1-based rows. So for selection, rawIndex is correct.
+        this.selectionManager.selectHeader(type, rawIndex, event.shiftKey, event.metaKey || event.ctrlKey);
       }
     });
 
-    // --- SelectionManager Events ---
+   // --- NEW: Resizer Event Wiring ---
+
+    // 1. Show Guide
+    this.resizer.on('resizeStart', ({ type, index }) => {
+        this.renderer.showResizeGuide(type, index);
+    });
+
+    // 2. Update Guide (Don't resize grid live anymore)
+    this.resizer.on('resizeUpdate', ({ type, delta }) => {
+        // OLD: this.renderer.setColumnWidths(...)
+        // NEW: Just move the line
+        this.renderer.updateResizeGuide(type, delta);
+    });
+
+    // 3. Commit Change (Command + Hide Guide)
+    this.resizer.on('resizeEnd', ({ type, finalSizes }) => {
+        this.renderer.hideResizeGuide();
+
+        // Prepare data for Command
+        const oldSizes = {};
+        const indices = Object.keys(finalSizes).map(k => parseInt(k, 10));
+        
+        indices.forEach(idx => {
+            if (type === 'col') oldSizes[idx] = this.renderer.columnWidths[idx];
+            else oldSizes[idx] = this.renderer.rowHeights[idx];
+        });
+
+        // Execute Command
+        const command = new ResizeCommand({
+            type,
+            indices,
+            newSizes: finalSizes,
+            oldSizes,
+            fileManager: this.fileManager,
+            renderer: this.renderer // Pass renderer to command
+        });
+
+        this.historyManager.execute(command);
+        this.renderer.cellGridContainer.focus();
+    });
+
+     // --- SelectionManager Events ---
 
     this.selectionManager.on('activeCellChange', (cellId) => {
       this._updateFormulaBar();
@@ -264,34 +320,7 @@ export class Spreadsheet {
     this.selectionManager.on('selectionChange', () => {
       this._updateMetadata();
     });
-
-    // --- GridResizer Events ---
-
-    this.resizer.on('resizeUpdate', ({ type, newSizes }) => {
-      if (type === 'col') this.renderer.setColumnWidths(Object.values(newSizes)); // Simplification for V1
-      else this.renderer.setRowHeights(Object.values(newSizes));
-    });
-
-    this.resizer.on('resizeEnd', ({ type, finalSizes }) => {
-      // 1. Apply visually
-      if (type === 'col') {
-        // This is a simplification. Ideally we merge `finalSizes` into existing array.
-        // For V1 we assume single resize or we need a smarter merge method.
-        const mergedWidths = [...this.renderer.columnWidths];
-        Object.entries(finalSizes).forEach(([idx, size]) => mergedWidths[idx] = size);
-        this.renderer.setColumnWidths(mergedWidths);
-        
-        // 2. Save to FileManager
-        if (this.fileManager) this.fileManager.updateColumnWidths(mergedWidths);
-      } else {
-        const mergedHeights = [...this.renderer.rowHeights];
-        Object.entries(finalSizes).forEach(([idx, size]) => mergedHeights[idx] = size);
-        this.renderer.setRowHeights(mergedHeights);
-        
-        if (this.fileManager) this.fileManager.updateRowHeights(mergedHeights);
-      }
-    });
-
+    
     // --- EditorManager Events ---
 
     this.editor.on('commit', ({ cellId, value, moveDirection }) => {

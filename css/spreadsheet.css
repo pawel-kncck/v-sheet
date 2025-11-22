@@ -419,6 +419,29 @@ body {
   pointer-events: none;
 }
 
+/* Resize Guide Line */
+.resize-guide {
+  position: absolute;
+  background-color: #5f6368; /* Google Sheets grey */
+  z-index: 100;
+  pointer-events: none; /* Let mouse events pass through */
+  display: none;
+}
+
+.resize-guide.col {
+  width: 3px;
+  height: 100%;
+  top: 0;
+  cursor: col-resize;
+}
+
+.resize-guide.row {
+  height: 3px;
+  width: 100%;
+  left: 0;
+  cursor: row-resize;
+}
+
 /* Scrollbar styling */
 #cell-grid::-webkit-scrollbar,
 .file-list::-webkit-scrollbar {
