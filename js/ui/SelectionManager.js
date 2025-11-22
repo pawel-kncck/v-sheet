@@ -27,6 +27,49 @@ export class SelectionManager {
   }
 
   /**
+ * Gets the currently active cell ID
+ * @returns {string|null} Cell ID like "A1" or null if none
+ */
+getActiveCellId() {
+  if (!this.activeCell) return null;
+  return this._coordsToCellId(this.activeCell);
+}
+
+/**
+ * Gets all currently selected cell IDs
+ * @returns {string[]} Array of cell IDs
+ */
+getSelectedCellIds() {
+  const cellIds = new Set();
+  
+  this.ranges.forEach(range => {
+    const { start, end } = range;
+    const minCol = Math.min(start.col, end.col);
+    const maxCol = Math.max(start.col, end.col);
+    const minRow = Math.min(start.row, end.row);
+    const maxRow = Math.max(start.row, end.row);
+    
+    for (let col = minCol; col <= maxCol; col++) {
+      for (let row = minRow; row <= maxRow; row++) {
+        cellIds.add(this._coordsToCellId({ row, col }));
+      }
+    }
+  });
+  
+  return Array.from(cellIds);
+}
+
+/**
+ * Clears all selections and resets state
+ */
+clear() {
+  this.activeCell = null;
+  this.selectionAnchor = null;
+  this.ranges = [];
+  this.gridRenderer.clearAllHighlights();
+}
+
+  /**
    * Selects a cell, handling shift/cmd modifiers.
    * @param {Object} coords - { row, col }
    * @param {boolean} isShift - Extend current selection?
