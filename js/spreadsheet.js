@@ -3,6 +3,7 @@ import { HistoryManager } from './history/HistoryManager.js';
 import { UpdateCellsCommand } from './history/commands/UpdateCellsCommand.js';
 import { MoveRangeCommand } from './history/commands/MoveRangeCommand.js';
 import { ResizeCommand } from './history/commands/ResizeCommand.js';
+import { FormatRangeCommand } from './history/commands/FormatRangeCommand.js';
 import { Logger } from './engine/utils/Logger.js';
 import { CellHelpers } from './engine/utils/CellHelpers.js';
 
@@ -41,8 +42,12 @@ export class Spreadsheet {
     
     // Data Layer
     this.clipboardManager = new ClipboardManager(this.renderer, (cellId) => {
-      return this.fileManager ? this.fileManager.getRawCellValue(cellId) : '';
-    });
+  if (!this.fileManager) return { value: '', style: null };
+  return {
+    value: this.fileManager.getRawCellValue(cellId),
+    style: this.fileManager.getCellStyle(cellId) // Helper we added in Phase 2
+  };
+});
 
     // History
     this.historyManager = new HistoryManager(100);
@@ -88,8 +93,12 @@ export class Spreadsheet {
     this.historyManager.clear();
     this.selectionManager.clear();
 
+    // Clear all content and styles first
     const cells = this.renderer.cellGridContainer.querySelectorAll('.cell');
-    cells.forEach(cell => cell.textContent = '');
+    cells.forEach(cell => {
+        cell.textContent = '';
+        cell.removeAttribute('style'); // NEW: Clear styles
+    });
 
     if (fileData.columnWidths) {
       this.renderer.setColumnWidths(fileData.columnWidths);
@@ -98,6 +107,27 @@ export class Spreadsheet {
       this.renderer.setRowHeights(fileData.rowHeights);
     }
 
+    // Load cells
+    if (fileData.cells) {
+        // NEW: Iterate over cells to set values AND styles
+        Object.entries(fileData.cells).forEach(([cellId, cellData]) => {
+            // 1. Set Value
+            if (cellData.value !== undefined) {
+                this.renderer.updateCellContent(cellId, cellData.value);
+            }
+            
+            // 2. Set Style
+            // We use the helper from FileManager which resolves the ID
+            if (this.fileManager) {
+                const style = this.fileManager.getCellStyle(cellId);
+                if (style) {
+                    this.renderer.updateCellStyle(cellId, style);
+                }
+            }
+        });
+    }
+
+    // Load Worker Data
     if (this.formulaWorker) {
       this.formulaWorker.postMessage({
         type: 'load',
@@ -105,6 +135,7 @@ export class Spreadsheet {
       });
     }
 
+    // Load Metadata
     if (fileData.metadata?.lastActiveCell) {
       const coords = this._cellIdToCoords(fileData.metadata.lastActiveCell);
       if (coords) {
@@ -449,6 +480,17 @@ export class Spreadsheet {
       return;
     }
 
+    if (isCmd && key === 'b') {
+      e.preventDefault();
+      this.applyRangeFormat({ font: { bold: true } }, 'toggle');
+      return;
+    }
+    if (isCmd && key === 'i') {
+      e.preventDefault();
+      this.applyRangeFormat({ font: { italic: true } }, 'toggle');
+      return;
+    }
+
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
       e.preventDefault();
       const direction = key.replace('Arrow', '').toLowerCase();
@@ -489,6 +531,54 @@ export class Spreadsheet {
     }
   }
 
+  /**
+   * Applies formatting to the currently selected range.
+   * @param {Object} styleChanges - The style to apply (e.g. { font: { bold: true } })
+   * @param {string} [mode='set'] - 'set' to apply directly, 'toggle' to invert based on active cell
+   */
+  applyRangeFormat(styleChanges, mode = 'set') {
+    const cellIds = this.selectionManager.getSelectedCellIds();
+    if (cellIds.length === 0) return;
+
+    let finalStyle = styleChanges;
+
+    // Toggle Logic
+    if (mode === 'toggle') {
+      const activeCellId = this.selectionManager.getActiveCellId();
+      const activeStyle = this.fileManager.getCellStyle(activeCellId) || {};
+      
+      // Clone the requested change to avoid mutation
+      finalStyle = JSON.parse(JSON.stringify(styleChanges));
+
+      // Recursive toggle helper
+      const toggleRecursive = (target, source) => {
+        for (const key in target) {
+          if (typeof target[key] === 'object' && target[key] !== null) {
+            if (source && source[key]) {
+              toggleRecursive(target[key], source[key]);
+            }
+          } else {
+            // If active cell already has this property truthy, flip target to false
+            if (source && source[key]) {
+              target[key] = false;
+            } else {
+              target[key] = true;
+            }
+          }
+        }
+      };
+      toggleRecursive(finalStyle, activeStyle);
+    }
+
+    const command = new FormatRangeCommand({
+      cellIds,
+      styleChanges: finalStyle,
+      fileManager: this.fileManager,
+      renderer: this.renderer
+    });
+
+    this.historyManager.execute(command);
+  }
   _executeCellUpdate(cellId, newValue) {
     const oldValue = this.fileManager.getRawCellValue(cellId);
     

@@ -8,6 +8,7 @@ describe('Spreadsheet Integration', () => {
     beforeEach(() => {
         dom = new JSDOM(`
       <div id="spreadsheet-container">
+        <input type="text" id="cell-editor" style="display: none;" />
         <div id="column-headers"></div>
         <div id="row-headers"></div>
         <div id="cell-grid"></div>

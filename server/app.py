@@ -50,8 +50,9 @@ class FileManager:
             'modified': timestamp,
             'data': {
                 'cells': {},
-                'columnWidths': [94] * 26,  # Default widths
-                'rowHeights': [20] * 100,    # Default heights
+                'styles': {},  # <--- NEW: Flyweight Style Palette
+                'columnWidths': [94] * 26,
+                'rowHeights': [20] * 100,
                 'metadata': {
                     'lastActiveCell': 'A1',
                     'selections': []

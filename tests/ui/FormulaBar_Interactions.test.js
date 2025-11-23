@@ -37,6 +37,8 @@ describe('FormulaBar Interactions', () => {
       ],
       currentFile: { id: '1', name: 'File A' },
       getCurrentFileId: vi.fn().mockReturnValue('1'), // Default to File A
+      // Added missing mock:
+      getCurrentFileName: vi.fn().mockReturnValue('File A'), 
       getCurrentFileData: vi.fn(),
       loadFile: vi.fn(),
       onFileListUpdate: null,
@@ -76,6 +78,10 @@ describe('FormulaBar Interactions', () => {
     // Act: Click File B
     await items[1].click();
 
+    // --- NEW: Wait for the async handler to finish ---
+    // The handler has a setTimeout(..., 0), so we yield to the event loop
+    await new Promise(resolve => setTimeout(resolve, 0));
+
     // Assert: Dropdown should be hidden despite the error
     expect(formulaBar.elements.fileDropdown.classList.contains('hidden')).toBe(true);
   });
@@ -91,9 +97,10 @@ describe('FormulaBar Interactions', () => {
     mockFileManager.getCurrentFileId.mockReturnValue('2');
     
     // 3. Act: Click Item '2' again. 
-    // If using stale closure (id='1'), it would try to load '2'.
-    // If using fresh check (id='2'), it should skip loading.
     await items[1].click();
+
+    // --- NEW: Wait here too, just to be safe ---
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     // Assert: Should NOT call loadFile because it's already current
     expect(mockFileManager.loadFile).not.toHaveBeenCalled();
