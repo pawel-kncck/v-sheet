@@ -22,7 +22,6 @@ export class Spreadsheet {
       throw new Error(`Container "${containerId}" not found.`);
     }
 
-    // Configuration
     this.config = {
       rows: 100,
       cols: 26,
@@ -30,52 +29,40 @@ export class Spreadsheet {
       defaultRowHeight: 20
     };
 
-    // --- 1. Initialize Modules ---
-    
-    // Visual Layer
     this.renderer = new GridRenderer(container, this.config);
-    
-    // Logic Layer
     this.selectionManager = new SelectionManager(this.renderer, this.config);
     this.resizer = new GridResizer();
     this.editor = new EditorManager(this.renderer);
     
-    // Data Layer
+    // Return both Value and Style for Copy operations
     this.clipboardManager = new ClipboardManager(this.renderer, (cellId) => {
-  if (!this.fileManager) return { value: '', style: null };
-  return {
-    value: this.fileManager.getRawCellValue(cellId),
-    style: this.fileManager.getCellStyle(cellId) // Helper we added in Phase 2
-  };
-});
+      if (!this.fileManager) return { value: '', style: null };
+      return {
+        value: this.fileManager.getRawCellValue(cellId),
+        style: this.fileManager.getCellStyle(cellId)
+      };
+    });
 
-    // History
     this.historyManager = new HistoryManager(100);
-
-    // State for Drag-and-Drop
     this.isDraggingCells = false;
     this.dragInfo = {};
 
-    // Bind drag handlers to this instance
     this._onDragMouseMove = this._onDragMouseMove.bind(this);
     this._onDragMouseUp = this._onDragMouseUp.bind(this);
 
-    // External Dependencies
     this.fileManager = null;
     this.formulaBar = null;
     this.formulaWorker = formulaWorker;
 
-    // --- 2. Setup ---
     this.renderer.createGrid();
     this._setupEventWiring();
     this._setupWorkerListeners();
-    
-    // Set initial selection
-    this.selectionManager.selectCell({ row: 1, col: 0 }); // A1
+    this.selectionManager.selectCell({ row: 1, col: 0 }); 
 
     Logger.log('Spreadsheet', 'Coordinator initialized');
   }
 
+  // ... [setFileManager, setFormulaBar methods same as before] ...
   setFileManager(fileManager) {
     this.fileManager = fileManager;
   }
@@ -87,17 +74,17 @@ export class Spreadsheet {
     }
   }
 
+  // ... [loadFromFile method same as before] ...
   loadFromFile(fileData) {
     if (!fileData) return;
 
     this.historyManager.clear();
     this.selectionManager.clear();
 
-    // Clear all content and styles first
     const cells = this.renderer.cellGridContainer.querySelectorAll('.cell');
     cells.forEach(cell => {
         cell.textContent = '';
-        cell.removeAttribute('style'); // NEW: Clear styles
+        cell.removeAttribute('style');
     });
 
     if (fileData.columnWidths) {
@@ -107,17 +94,11 @@ export class Spreadsheet {
       this.renderer.setRowHeights(fileData.rowHeights);
     }
 
-    // Load cells
     if (fileData.cells) {
-        // NEW: Iterate over cells to set values AND styles
         Object.entries(fileData.cells).forEach(([cellId, cellData]) => {
-            // 1. Set Value
             if (cellData.value !== undefined) {
                 this.renderer.updateCellContent(cellId, cellData.value);
             }
-            
-            // 2. Set Style
-            // We use the helper from FileManager which resolves the ID
             if (this.fileManager) {
                 const style = this.fileManager.getCellStyle(cellId);
                 if (style) {
@@ -127,7 +108,6 @@ export class Spreadsheet {
         });
     }
 
-    // Load Worker Data
     if (this.formulaWorker) {
       this.formulaWorker.postMessage({
         type: 'load',
@@ -135,7 +115,6 @@ export class Spreadsheet {
       });
     }
 
-    // Load Metadata
     if (fileData.metadata?.lastActiveCell) {
       const coords = this._cellIdToCoords(fileData.metadata.lastActiveCell);
       if (coords) {
@@ -144,6 +123,7 @@ export class Spreadsheet {
     }
   }
 
+  // ... [clear method same as before] ...
   clear() {
     this.renderer.createGrid();
     this.selectionManager.clear();
@@ -151,56 +131,41 @@ export class Spreadsheet {
     this.selectionManager.selectCell({ row: 1, col: 0 });
   }
 
-  // ==========================================================================
-  // EVENT WIRING
-  // ==========================================================================
-
+  // ... [_setupEventWiring, _setupWorkerListeners, Drag methods same as before] ...
+  
   _setupEventWiring() {
-    // 1. Cell Selection (Click / Drag)
+    // ... (Same as previous epic) ...
+    // Simplified for brevity, assume all listener wiring is present
     this.renderer.on('cellMouseDown', ({ cellElement, event }) => {
-      this.renderer.cellGridContainer.focus()
+      this.renderer.cellGridContainer.focus();
       if (this.editor.isEditing) return;
       if (this.resizer.isResizing) return;
       
       const coords = this._getCellCoordsFromElement(cellElement);
-
       const cursor = this.selectionManager.getCursorForCell(coords, event, cellElement);
       
       if (cursor === 'grab') {
         this.isDraggingCells = true;
-        
         const ranges = this.selectionManager.ranges;
         const activeRange = ranges[ranges.length - 1];
-
         this.dragInfo = {
           startX: event.clientX,
           startY: event.clientY,
           startCoords: coords, 
           selection: activeRange
         };
-
         this.renderer.showDragGhost(activeRange);
-
         window.addEventListener('mousemove', this._onDragMouseMove);
         window.addEventListener('mouseup', this._onDragMouseUp, { once: true });
-        
         return;
       }
-      
-      if (event.button === 2) {
-        return; 
-      }
-
+      if (event.button === 2) return; 
       this.selectionManager.selectCell(coords, event.shiftKey, event.metaKey || event.ctrlKey);
     });
 
     this.renderer.on('cellMouseOver', ({ cellElement, event }) => {
-      if (this.editor.isEditing) return;
-      if (this.isDraggingCells) return;
-      if (this.resizer.isResizing) return;
-
+      if (this.editor.isEditing || this.isDraggingCells || this.resizer.isResizing) return;
       const coords = this._getCellCoordsFromElement(cellElement);
-
       if (event.buttons === 1) {
         this.selectionManager.selectCell(coords, true, false);
       } else {
@@ -215,9 +180,7 @@ export class Spreadsheet {
       this.editor.startEdit(cellId, rawValue);
     });
 
-    // 2. Header Selection
     this.renderer.on('headerClick', ({ type, index, event }) => {
-      // FIX: Bug 3 - Don't select if we just finished resizing
       if (this.resizer.isResizing || this.resizer.justFinishedResizing) return;
       this.selectionManager.selectHeader(type, index, event.shiftKey, event.metaKey || event.ctrlKey);
     });
@@ -231,21 +194,15 @@ export class Spreadsheet {
       }
     });
 
-    // 3. Resizing
     this.renderer.on('headerMouseDown', ({ type, event }) => {
-      this.renderer.cellGridContainer.focus()
+      this.renderer.cellGridContainer.focus();
       const target = event.target.closest('.header-cell');
       const cursor = this.resizer.getCursorForHeader(target, event);
-      
       if (cursor !== 'default') {
         event.preventDefault(); 
         event.stopPropagation();
         let index = parseInt(type === 'col' ? target.dataset.col : target.dataset.row, 10);
-        
-        if (type === 'row') {
-            index = index - 1;
-        }
-
+        if (type === 'row') index = index - 1;
         const currentSizes = type === 'col' ? this.renderer.columnWidths : this.renderer.rowHeights;
         this.resizer.startResize(type, [index], currentSizes, event);
       } else {
@@ -254,72 +211,45 @@ export class Spreadsheet {
       }
     });
 
-    // Resizer Events
-    this.resizer.on('resizeStart', ({ type, index }) => {
-        this.renderer.showResizeGuide(type, index);
-    });
-
-    this.resizer.on('resizeUpdate', ({ type, delta }) => {
-        this.renderer.updateResizeGuide(type, delta);
-    });
-
+    this.resizer.on('resizeStart', ({ type, index }) => this.renderer.showResizeGuide(type, index));
+    this.resizer.on('resizeUpdate', ({ type, delta }) => this.renderer.updateResizeGuide(type, delta));
     this.resizer.on('resizeEnd', ({ type, finalSizes }) => {
         this.renderer.hideResizeGuide();
-
         const oldSizes = {};
         const indices = Object.keys(finalSizes).map(k => parseInt(k, 10));
-        
         indices.forEach(idx => {
             if (type === 'col') oldSizes[idx] = this.renderer.columnWidths[idx];
             else oldSizes[idx] = this.renderer.rowHeights[idx];
         });
-
         const command = new ResizeCommand({
-            type,
-            indices,
-            newSizes: finalSizes,
-            oldSizes,
-            fileManager: this.fileManager,
-            renderer: this.renderer
+            type, indices, newSizes: finalSizes, oldSizes,
+            fileManager: this.fileManager, renderer: this.renderer
         });
-
         this.historyManager.execute(command);
         this.renderer.cellGridContainer.focus();
     });
 
-    // SelectionManager Events
     this.selectionManager.on('activeCellChange', (cellId) => {
       this._updateFormulaBar();
       this._updateMetadata();
     });
-
-    this.selectionManager.on('selectionChange', () => {
-      this._updateMetadata();
-    });
+    this.selectionManager.on('selectionChange', () => this._updateMetadata());
     
-    // EditorManager Events
     this.editor.on('commit', ({ cellId, value, moveDirection }) => {
       this._executeCellUpdate(cellId, value);
-      
       if (moveDirection === 'down') this.selectionManager.moveSelection('down');
       else if (moveDirection === 'right') this.selectionManager.moveSelection('right');
-      
       this.renderer.cellGridContainer.focus();
     });
 
-    // Global Keyboard Events
     this.renderer.cellGridContainer.tabIndex = 0;
-    this.renderer.cellGridContainer.addEventListener('keydown', (e) => {
-      this._handleGlobalKeydown(e);
-    });
+    this.renderer.cellGridContainer.addEventListener('keydown', (e) => this._handleGlobalKeydown(e));
   }
 
   _setupWorkerListeners() {
     if (!this.formulaWorker) return;
-
     this.formulaWorker.onmessage = (event) => {
       const { type, payload } = event.data;
-
       if (type === 'updates') {
         Object.entries(payload.updates).forEach(([cellId, value]) => {
           this.renderer.updateCellContent(cellId, value);
@@ -330,107 +260,69 @@ export class Spreadsheet {
     };
   }
 
-  // ==========================================================================
-  // DRAG AND DROP HANDLERS
-  // ==========================================================================
-
   _onDragMouseMove(e) {
     if (!this.isDraggingCells) return;
-
+    // ... (Same ghost drag logic) ...
+    // Re-implementing simplified ghost logic for completeness
     const ghost = document.getElementById('drag-ghost');
     if (ghost) ghost.style.display = 'none';
-    
     const targetElement = document.elementFromPoint(e.clientX, e.clientY);
     const targetCell = targetElement ? targetElement.closest('.cell') : null;
-    
     if (ghost) ghost.style.display = 'block';
 
     if (targetCell) {
       const startCoords = this.dragInfo.startCoords; 
       const currentCoords = this._getCellCoordsFromElement(targetCell);
-
       const colDiff = currentCoords.col - startCoords.col;
       const rowDiff = currentCoords.row - startCoords.row;
-
-      // FIX: Bug 1 - Update Ghost Size
       const { selection } = this.dragInfo;
-      
-      // Calculate range dimensions in cells
       const rangeWidthCells = Math.abs(selection.end.col - selection.start.col);
       const rangeHeightCells = Math.abs(selection.end.row - selection.start.row);
-      
-      // Calculate target range bounds
       const targetStartCol = selection.start.col + colDiff;
       const targetStartRow = selection.start.row + rowDiff;
       const targetEndCol = targetStartCol + rangeWidthCells;
       const targetEndRow = targetStartRow + rangeHeightCells;
 
-      // Sum pixel widths
       let newWidthPx = 0;
       for(let c = targetStartCol; c <= targetEndCol; c++) {
-          if (c >= 0 && c < this.config.cols) {
-              newWidthPx += (this.renderer.columnWidths[c] || this.config.defaultColWidth);
-          }
+          if (c >= 0 && c < this.config.cols) newWidthPx += (this.renderer.columnWidths[c] || this.config.defaultColWidth);
       }
-
-      // Sum pixel heights
       let newHeightPx = 0;
       for(let r = targetStartRow; r <= targetEndRow; r++) {
-          // Rows are 1-based in logic but 0-based in heights array
-          // renderer.rowHeights[0] corresponds to Row 1
-          if (r >= 1 && r <= this.config.rows) {
-              newHeightPx += (this.renderer.rowHeights[r - 1] || this.config.defaultRowHeight);
-          }
+          if (r >= 1 && r <= this.config.rows) newHeightPx += (this.renderer.rowHeights[r - 1] || this.config.defaultRowHeight);
       }
-
-      // Update Ghost DOM
       if (ghost && newWidthPx > 0 && newHeightPx > 0) {
           ghost.style.width = `${newWidthPx}px`;
           ghost.style.height = `${newHeightPx}px`;
       }
-
-      // Move Ghost
       const startCellEl = this.renderer.getCellElementByCoords(startCoords.row, startCoords.col);
       if (startCellEl && targetCell) {
         const startRect = startCellEl.getBoundingClientRect();
         const targetRect = targetCell.getBoundingClientRect();
-
-        const deltaX = targetRect.left - startRect.left;
-        const deltaY = targetRect.top - startRect.top;
-
-        this.renderer.updateDragGhost(deltaX, deltaY);
+        this.renderer.updateDragGhost(targetRect.left - startRect.left, targetRect.top - startRect.top);
       }
     }
   }
 
   _onDragMouseUp(e) {
     if (!this.isDraggingCells) return;
-
     try {
       this.renderer.hideDragGhost();
-      
       const dropTarget = document.elementFromPoint(e.clientX, e.clientY);
       const cell = dropTarget ? dropTarget.closest('.cell') : null;
-
       if (cell) {
         const dropCoords = this._getCellCoordsFromElement(cell);
         const { selection, startCoords } = this.dragInfo;
-
-        if (!startCoords) {
-            console.error('Missing startCoords in dragInfo');
-            return;
-        }
-
-        const colOffset = dropCoords.col - startCoords.col;
-        const rowOffset = dropCoords.row - startCoords.row;
-
-        if (colOffset !== 0 || rowOffset !== 0) {
-          const newTopLeft = {
-            col: selection.start.col + colOffset,
-            row: selection.start.row + rowOffset
-          };
-          
-          this._executeMoveCommand(selection, colOffset, rowOffset, newTopLeft);
+        if (startCoords) {
+            const colOffset = dropCoords.col - startCoords.col;
+            const rowOffset = dropCoords.row - startCoords.row;
+            if (colOffset !== 0 || rowOffset !== 0) {
+              const newTopLeft = {
+                col: selection.start.col + colOffset,
+                row: selection.start.row + rowOffset
+              };
+              this._executeMoveCommand(selection, colOffset, rowOffset, newTopLeft);
+            }
         }
       }
     } catch (error) {
@@ -439,7 +331,6 @@ export class Spreadsheet {
       this.isDraggingCells = false;
       this.dragInfo = {};
       window.removeEventListener('mousemove', this._onDragMouseMove);
-      
       if (this.renderer && this.renderer.cellGridContainer) {
         this.renderer.cellGridContainer.style.cursor = 'default';
       }
@@ -453,33 +344,31 @@ export class Spreadsheet {
   _handleGlobalKeydown(e) {
     if (this.editor.isEditing) return; 
 
-    const key = e.key;
+    const key = e.key.toLowerCase(); 
     const isCmd = e.metaKey || e.ctrlKey;
     const isShift = e.shiftKey;
 
-    if (isCmd && key.toLowerCase() === 'z') {
+    if (isCmd && key === 'z') {
       e.preventDefault();
       if (isShift) this.historyManager.redo();
       else this.historyManager.undo();
       return;
     }
-    if (isCmd && key.toLowerCase() === 'y') {
+    if (isCmd && key === 'y') {
       e.preventDefault();
       this.historyManager.redo();
       return;
     }
-
-    if (isCmd && key.toLowerCase() === 'c') {
+    if (isCmd && key === 'c') {
       e.preventDefault();
       this.clipboardManager.copy(this.selectionManager.ranges);
       return;
     }
-    if (isCmd && key.toLowerCase() === 'v') {
+    if (isCmd && key === 'v') {
       e.preventDefault();
       this._handlePaste();
       return;
     }
-
     if (isCmd && key === 'b') {
       e.preventDefault();
       this.applyRangeFormat({ font: { bold: true } }, 'toggle');
@@ -491,10 +380,9 @@ export class Spreadsheet {
       return;
     }
 
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
       e.preventDefault();
-      const direction = key.replace('Arrow', '').toLowerCase();
-      
+      const direction = e.key.replace('Arrow', '').toLowerCase();
       if (isCmd) {
         this.selectionManager.jumpToEdge(direction, (cellId) => {
             const val = this.fileManager.getRawCellValue(cellId);
@@ -506,7 +394,7 @@ export class Spreadsheet {
       return;
     }
 
-    if (key === 'Enter') {
+    if (e.key === 'Enter') {
       e.preventDefault();
       const activeId = this.selectionManager.getActiveCellId();
       if (activeId) {
@@ -516,26 +404,21 @@ export class Spreadsheet {
       return;
     }
     
-    if (key === 'Backspace' || key === 'Delete') {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
       e.preventDefault();
       this._clearSelection();
       return;
     }
 
-    if (key.length === 1 && !isCmd && !e.altKey) {
+    if (e.key.length === 1 && !isCmd && !e.altKey) {
       const activeId = this.selectionManager.getActiveCellId();
       if (activeId) {
         e.preventDefault();
-        this.editor.startEdit(activeId, '', key); 
+        this.editor.startEdit(activeId, '', e.key); 
       }
     }
   }
 
-  /**
-   * Applies formatting to the currently selected range.
-   * @param {Object} styleChanges - The style to apply (e.g. { font: { bold: true } })
-   * @param {string} [mode='set'] - 'set' to apply directly, 'toggle' to invert based on active cell
-   */
   applyRangeFormat(styleChanges, mode = 'set') {
     const cellIds = this.selectionManager.getSelectedCellIds();
     if (cellIds.length === 0) return;
@@ -547,10 +430,8 @@ export class Spreadsheet {
       const activeCellId = this.selectionManager.getActiveCellId();
       const activeStyle = this.fileManager.getCellStyle(activeCellId) || {};
       
-      // Clone the requested change to avoid mutation
       finalStyle = JSON.parse(JSON.stringify(styleChanges));
 
-      // Recursive toggle helper
       const toggleRecursive = (target, source) => {
         for (const key in target) {
           if (typeof target[key] === 'object' && target[key] !== null) {
@@ -558,7 +439,6 @@ export class Spreadsheet {
               toggleRecursive(target[key], source[key]);
             }
           } else {
-            // If active cell already has this property truthy, flip target to false
             if (source && source[key]) {
               target[key] = false;
             } else {
@@ -579,15 +459,16 @@ export class Spreadsheet {
 
     this.historyManager.execute(command);
   }
+
   _executeCellUpdate(cellId, newValue) {
     const oldValue = this.fileManager.getRawCellValue(cellId);
-    
     if (newValue === oldValue) return;
 
     const command = new UpdateCellsCommand({
       cellUpdates: [{ cellId, newValue, oldValue }],
       fileManager: this.fileManager,
-      formulaWorker: this.formulaWorker
+      formulaWorker: this.formulaWorker,
+      renderer: this.renderer // Pass renderer
     });
 
     this.historyManager.execute(command);
@@ -603,13 +484,16 @@ export class Spreadsheet {
     const cellUpdates = updates.map(update => ({
       cellId: update.cellId,
       newValue: update.value,
-      oldValue: this.fileManager.getRawCellValue(update.cellId)
+      newStyle: update.style, // Include Style
+      oldValue: this.fileManager.getRawCellValue(update.cellId),
+      oldStyle: this.fileManager.getCellStyle(update.cellId) // Capture Old Style for Undo
     }));
 
     const command = new UpdateCellsCommand({
       cellUpdates,
       fileManager: this.fileManager,
-      formulaWorker: this.formulaWorker
+      formulaWorker: this.formulaWorker,
+      renderer: this.renderer // Pass renderer
     });
 
     this.historyManager.execute(command);
@@ -635,7 +519,8 @@ export class Spreadsheet {
       const command = new UpdateCellsCommand({
         cellUpdates,
         fileManager: this.fileManager,
-        formulaWorker: this.formulaWorker
+        formulaWorker: this.formulaWorker,
+        renderer: this.renderer
       });
       this.historyManager.execute(command);
     }
@@ -695,14 +580,16 @@ export class Spreadsheet {
     const minRow = Math.min(start.row, end.row);
     const maxRow = Math.max(start.row, end.row);
 
-    // 1. Collect data being moved
+    // 1. Collect data being moved (Value AND Style)
     const movedData = [];
     for (let col = minCol; col <= maxCol; col++) {
       for (let row = minRow; row <= maxRow; row++) {
         const cellId = this._buildCellId(row, col);
         const value = this.fileManager.getRawCellValue(cellId);
-        if (value !== undefined && value !== '') {
-          movedData.push({ cellId, value });
+        const style = this.fileManager.getCellStyle(cellId);
+        
+        if ((value !== undefined && value !== '') || style) {
+          movedData.push({ cellId, value, style });
         }
       }
     }
@@ -710,11 +597,9 @@ export class Spreadsheet {
     if (movedData.length === 0) return;
 
     // 2. Collect data being overwritten at destination
-    // FIX: Bug 2 - Capture ALL target cell states, even if empty
     const overwrittenData = [];
     const targetMinCol = targetTopLeft.col;
     const targetMinRow = targetTopLeft.row;
-    
     const width = maxCol - minCol;
     const height = maxRow - minRow;
 
@@ -722,8 +607,13 @@ export class Spreadsheet {
       for (let row = targetMinRow; row <= targetMinRow + height; row++) {
         const cellId = this._buildCellId(row, col);
         const value = this.fileManager.getRawCellValue(cellId);
-        // We store the value, defaulting to '' if undefined, so Undo can restore the "empty" state
-        overwrittenData.push({ cellId, value: value || '' });
+        const style = this.fileManager.getCellStyle(cellId);
+        
+        overwrittenData.push({ 
+            cellId, 
+            value: value || '',
+            style: style // Store overwritten style
+        });
       }
     }
 
@@ -733,19 +623,14 @@ export class Spreadsheet {
       movedData,
       overwrittenData,
       fileManager: this.fileManager,
-      formulaWorker: this.formulaWorker
+      formulaWorker: this.formulaWorker,
+      renderer: this.renderer // Pass renderer
     });
 
     this.historyManager.execute(command);
 
-    const newStart = {
-      col: start.col + colOffset,
-      row: start.row + rowOffset
-    };
-    const newEnd = {
-      col: end.col + colOffset,
-      row: end.row + rowOffset
-    };
+    const newStart = { col: start.col + colOffset, row: start.row + rowOffset };
+    const newEnd = { col: end.col + colOffset, row: end.row + rowOffset };
     
     this.selectionManager.ranges = [{ start: newStart, end: newEnd }];
     this.selectionManager.selectionAnchor = newStart;

@@ -42,7 +42,6 @@ export class EditorManager {
     this.isIntentionalEdit = !!triggerKey;
 
     // 1. Position the editor over the cell
-    // We need to calculate position relative to the scrolled grid container
     const gridContainer = this.renderer.cellGridContainer;
     const cellRect = cellElement.getBoundingClientRect();
     
@@ -56,8 +55,18 @@ export class EditorManager {
     this.cellEditor.style.height = `${cellRect.height}px`;
     this.cellEditor.style.display = 'block';
 
+    // --- NEW: Sync Styles ---
+    const computedStyle = window.getComputedStyle(cellElement);
+    this.cellEditor.style.fontFamily = computedStyle.fontFamily;
+    this.cellEditor.style.fontSize = computedStyle.fontSize;
+    this.cellEditor.style.fontWeight = computedStyle.fontWeight;
+    this.cellEditor.style.fontStyle = computedStyle.fontStyle;
+    this.cellEditor.style.color = computedStyle.color;
+    this.cellEditor.style.textAlign = computedStyle.textAlign;
+    this.cellEditor.style.backgroundColor = computedStyle.backgroundColor;
+    // ------------------------
+
     // 2. Set Value
-    // If triggerKey exists (e.g., user typed '5'), replace value. Otherwise use existing.
     this.cellEditor.value = triggerKey ? triggerKey : initialValue;
 
     // 3. Visuals
@@ -66,7 +75,6 @@ export class EditorManager {
     
     // If not a trigger key start (e.g. double click), select all text
     if (!triggerKey) {
-      // Timeout ensures focus logic completes before selection
       setTimeout(() => {
         this.cellEditor.select();
       }, 0);
@@ -122,18 +130,25 @@ export class EditorManager {
     this.cellEditor.style.display = 'none';
     this.cellEditor.value = '';
     
-    // Return focus to the grid so keyboard nav works immediately
+    // Reset styles to avoid leaking to next edit
+    this.cellEditor.style.fontFamily = '';
+    this.cellEditor.style.fontSize = '';
+    this.cellEditor.style.fontWeight = '';
+    this.cellEditor.style.fontStyle = '';
+    this.cellEditor.style.color = '';
+    this.cellEditor.style.textAlign = '';
+    this.cellEditor.style.backgroundColor = '';
+
     this.renderer.cellGridContainer.focus();
   }
 
   _bindEvents() {
-    // Handle keys inside the input
     this.cellEditor.addEventListener('keydown', (e) => {
       const key = e.key;
 
       if (key === 'Enter') {
         e.preventDefault();
-        this.commitEdit('down'); // Default Excel behavior
+        this.commitEdit('down');
       } else if (key === 'Tab') {
         e.preventDefault();
         this.commitEdit('right');
@@ -141,24 +156,15 @@ export class EditorManager {
         e.preventDefault();
         this.cancelEdit();
       }
-      // Note: Arrow keys currently just move cursor in input.
-      // In "Formula Building UX" epic, this is where we will inject logic 
-      // to let arrows navigate the grid instead.
     });
 
-    // Commit on blur (clicking away)
     this.cellEditor.addEventListener('blur', () => {
       if (this.isEditing) {
-        this.commitEdit('none'); // Don't move selection on blur
+        this.commitEdit('none');
       }
     });
   }
 
-  /**
-   * Register callbacks
-   * @param {string} eventName - 'commit', 'cancel'
-   * @param {Function} callback 
-   */
   on(eventName, callback) {
     const callbackKey = `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`;
     if (callbackKey in this.callbacks) {
