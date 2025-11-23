@@ -85,6 +85,46 @@ body {
   pointer-events: none;
 }
 
+/* Toolbar Selects */
+.toolbar-select-wrapper {
+  position: relative;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  margin: 0 2px;
+}
+
+.toolbar-select {
+  height: 24px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #444746;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.toolbar-select:hover {
+  background-color: #e8eaed;
+}
+
+/* Color Picker hidden input hack */
+.color-picker-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.hidden-color-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
 /* ==================== FORMULA BAR STYLES ==================== */
 
 #formula-bar-container {

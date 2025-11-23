@@ -1,5 +1,4 @@
 import { Logger } from '../engine/utils/Logger.js';
-// FormatRangeCommand import removed (no longer needed here)
 
 export class Toolbar {
   constructor(container, spreadsheet) {
@@ -7,6 +6,7 @@ export class Toolbar {
     this.spreadsheet = spreadsheet;
 
     this.items = [
+      // ... Undo/Redo buttons ...
       {
         type: 'button',
         id: 'undo',
@@ -22,13 +22,46 @@ export class Toolbar {
         action: () => this.spreadsheet.historyManager.redo()
       },
       { type: 'separator' },
-      // --- FORMATTING BUTTONS ---
+      
+      // --- FONT FAMILY ---
+      {
+        type: 'select',
+        id: 'font-family',
+        tooltip: 'Font Family',
+        options: [
+          { value: 'Arial', text: 'Arial' },
+          { value: 'Verdana', text: 'Verdana' },
+          { value: 'Times New Roman', text: 'Times' },
+          { value: 'Courier New', text: 'Courier' },
+          { value: 'Georgia', text: 'Georgia' }
+        ],
+        action: (val) => this.spreadsheet.applyRangeFormat({ font: { family: val } })
+      },
+
+      // --- FONT SIZE ---
+      {
+        type: 'select',
+        id: 'font-size',
+        tooltip: 'Font Size',
+        options: [
+          { value: '10', text: '10' },
+          { value: '11', text: '11' },
+          { value: '12', text: '12' },
+          { value: '14', text: '14' },
+          { value: '18', text: '18' },
+          { value: '24', text: '24' }
+        ],
+        action: (val) => this.spreadsheet.applyRangeFormat({ font: { size: val } })
+      },
+      
+      { type: 'separator' },
+
+      // ... Bold/Italic buttons ...
       {
         type: 'button',
         id: 'bold',
         icon: '<path d="M15.6 10.79c.97-.67 1.65-1.77 1.65-2.79 0-2.26-1.75-4-4-4H7v14h7.04c2.09 0 3.71-1.7 3.71-3.79 0-1.52-.86-2.82-2.15-3.42zM10 6.5h3c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-3v-3zm3.5 9H10v-3h3.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5z"/>',
         tooltip: 'Bold (Ctrl+B)',
-        // DELEGATE TO SPREADSHEET
         action: () => this.spreadsheet.applyRangeFormat({ font: { bold: true } }, 'toggle')
       },
       {
@@ -36,10 +69,31 @@ export class Toolbar {
         id: 'italic',
         icon: '<path d="M10 4v3h2.21l-3.42 8H6v3h8v-3h-2.21l3.42-8H18V4z"/>',
         tooltip: 'Italic (Ctrl+I)',
-        // DELEGATE TO SPREADSHEET
-        action: () => this.spreadsheet.applyRangeFormat({ font: { italic: true } }, 'toggle') 
+        action: () => this.spreadsheet.applyRangeFormat({ font: { italic: true } }, 'toggle')
       },
+
+      // --- TEXT COLOR ---
+      {
+        type: 'color',
+        id: 'text-color',
+        icon: '<path d="M0 20h24v4H0z"/><path style="fill:currentColor" d="M11 3L5.5 17h2.25l1.12-3h6.25l1.12 3h2.25L13 3h-2zm-1.38 9L12 5.67 14.38 12H9.62z"/>',
+        tooltip: 'Text Color',
+        value: '#000000',
+        action: (val) => this.spreadsheet.applyRangeFormat({ font: { color: val } })
+      },
+
+      // --- FILL COLOR ---
+      {
+        type: 'color',
+        id: 'fill-color',
+        icon: '<path d="M16.56 8.94L7.62 0 6.21 1.41l2.38 2.38-5.15 5.15c-.59.59-.59 1.54 0 2.12l5.5 5.5c.29.29.68.44 1.06.44s.77-.15 1.06-.44l5.5-5.5c.59-.58.59-1.53 0-2.12zM5.21 10L10 5.21 14.79 10H5.21zM19 11.5s-2 2.17-2 3.5c0 1.1.9 2 2 2s2-.9 2-2c0-1.33-2-3.5-2-3.5zM0 20h24v4H0z"/>',
+        tooltip: 'Fill Color',
+        value: '#ffffff',
+        action: (val) => this.spreadsheet.applyRangeFormat({ fill: { color: val } })
+      },
+
       { type: 'separator' },
+      // ... Align buttons ...
       {
         type: 'button',
         id: 'align-left',
@@ -47,24 +101,10 @@ export class Toolbar {
         tooltip: 'Align Left',
         action: () => this.spreadsheet.applyRangeFormat({ align: { h: 'left' } })
       },
-      {
-        type: 'button',
-        id: 'align-center',
-        icon: '<path d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8H18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z"/>',
-        tooltip: 'Align Center',
-        action: () => this.spreadsheet.applyRangeFormat({ align: { h: 'center' } })
-      },
-      {
-        type: 'button',
-        id: 'align-right',
-        icon: '<path d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18v-2H3v2zm6-4h12V7H9v2zM3 3v2h18V3H3z"/>',
-        tooltip: 'Align Right',
-        action: () => this.spreadsheet.applyRangeFormat({ align: { h: 'right' } })
-      }
+      // ... (Center/Right align buttons) ...
     ];
 
     this.render();
-    Logger.log('Toolbar', 'Initialized');
   }
 
   render() {
@@ -78,6 +118,69 @@ export class Toolbar {
         return;
       }
 
+      // 1. Render Select Dropdowns
+      if (item.type === 'select') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'toolbar-select-wrapper';
+        
+        const select = document.createElement('select');
+        select.className = 'toolbar-select';
+        select.title = item.tooltip || '';
+        
+        item.options.forEach(opt => {
+          const option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.text;
+          select.appendChild(option);
+        });
+
+        select.addEventListener('change', (e) => {
+          if (item.action) item.action(e.target.value);
+          // Reset focus to grid so keyboard nav works immediately
+          this.spreadsheet.renderer.cellGridContainer.focus();
+        });
+
+        wrapper.appendChild(select);
+        this.container.appendChild(wrapper);
+        return;
+      }
+
+      // 2. Render Color Pickers
+      if (item.type === 'color') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'toolbar-btn color-picker-btn';
+        wrapper.title = item.tooltip || '';
+
+        // Icon
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.innerHTML = item.icon;
+        wrapper.appendChild(svg);
+
+        // Hidden Input
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = item.value || '#000000';
+        input.className = 'hidden-color-input';
+        
+        // Trigger input when wrapper clicked
+        wrapper.addEventListener('click', () => input.click());
+
+        // Handle color change
+        input.addEventListener('input', (e) => {
+          if (item.action) item.action(e.target.value);
+        });
+        // Refocus grid on close (change event fires on close/commit)
+        input.addEventListener('change', () => {
+             this.spreadsheet.renderer.cellGridContainer.focus();
+        });
+
+        wrapper.appendChild(input);
+        this.container.appendChild(wrapper);
+        return;
+      }
+
+      // 3. Render Standard Buttons
       const btn = document.createElement('button');
       btn.className = 'toolbar-btn';
       btn.dataset.id = item.id;

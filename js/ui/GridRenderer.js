@@ -112,6 +112,7 @@ export class GridRenderer {
     cell.style.backgroundColor = '';
     cell.style.textAlign = '';
     cell.style.fontSize = '';
+    cell.style.fontFamily = '';
     cell.style.whiteSpace = 'nowrap'; // Default
     // Reset Flex properties for vertical align
     cell.style.display = '';
@@ -134,6 +135,7 @@ export class GridRenderer {
       }
       if (style.font.color) cell.style.color = style.font.color;
       if (style.font.size) cell.style.fontSize = `${style.font.size}px`;
+      if (style.font.family) cell.style.fontFamily = style.font.family;
     }
 
     // 3. Apply Fill
