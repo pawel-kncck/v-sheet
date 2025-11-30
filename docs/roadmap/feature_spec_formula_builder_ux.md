@@ -1,156 +1,165 @@
-Based on the user's detailed notes and the existing codebase analysis, here is the Feature Specification for **Epic 7: Formula-Building UX**.
-
-This specification bridges the gap between the current simple text input and the interactive, visual experience described (similar to Google Sheets/Excel).
+Here is the final, revised Feature Specification for **Epic 7: Formula-Building UX**, incorporating the "Token Origin" logic and the refined state machine to match industry standards (Excel/Google Sheets).
 
 ---
 
-# Feature Spec: Formula-Building UX
+# Feature Spec: Epic 7 - Formula-Building UX
 
-- **Epic:** 7 (Enhanced)
+- **Status:** Final
+- **Epic:** 7
 - **Depends On:** Epic 2 (Tokenizer), Epic 3 (Formatting - for UI layers)
-- **Status:** Ready for Development
 
-## 1. Overview
+## 1\. Overview
 
-The goal is to transform the formula entry experience from a static text input into a dynamic, interactive mode. This involves a "Formula Building" state machine that manages autocomplete, visual grid feedback (colored borders/overlays), live reference parsing, and keyboard navigation context switching.
+The goal is to transform the formula entry experience from a static text input into a dynamic, interactive mode. This feature introduces a robust **"Formula Building"** state machine that manages visual feedback, autocomplete, and reference navigation, mimicking the professional feel of Excel.
 
-## 2. User Flow & States
-
-The application must switch between three internal states during cell editing:
-
-1.  **Text Edit Mode:** Standard typing (e.g., typing "Apple").
-2.  **Formula Navigation Mode:** Activated after `=`, `+`, `-`, `(`, `,`. Arrow keys move a "selection reticle" on the grid, inserting references into the formula.
-3.  **Formula Autocomplete Mode:** Activated after typing a letter (e.g., `S`). Arrow keys navigate a dropdown list of functions.
-
-## 3. Functional Requirements
-
-### 3.1. Formula Building State Machine
-
-- **Activation:** Triggered when the cell content starts with `=`.
-- **Context Switching:**
-  - **Input:** `=`, `Operator`, `(`, `,` $\rightarrow$ **Switch to Navigation Mode**.
-  - **Input:** `Letter` (A-Z) $\rightarrow$ **Switch to Autocomplete Mode**.
-  - **Input:** `Enter` $\rightarrow$ Commit formula.
-  - **Input:** `Esc` $\rightarrow$ Cancel formula.
-
-### 3.2. Function Autocomplete (The Popup)
-
-- **UI:** A popup list appears below the active cell/formula bar when the user types a letter (e.g., "S").
-- **Filtering:** List shows functions matching the current token (e.g., "S" -> `SUM`, `SUMIF`, `SUMPRODUCT`).
-- **Navigation:**
-  - `ArrowUp`/`ArrowDown`: Cycle through the list (Looping: Last $\leftrightarrow$ First).
-  - `Tab`: Accepts the highlighted function.
-- **Acceptance Action:**
-  - Inserts function name + opening bracket (e.g., `SUM(`).
-  - Switches state to **Navigation Mode**.
-
-### 3.3. Live Visual Feedback (The "Mini-Parser")
-
-- **Tokenization:** On every keystroke, the text must be tokenized to identify:
-  - Cell References (`C3`)
-  - Range References (`C7:C9`)
-  - Open-ended Ranges (`C7:C`)
-  - Functions / Brackets.
-- **Color Palette:** A fixed palette of 12 distinct colors must be used.
-  - Colors are assigned sequentially to unique references found in the formula string.
-  - Example: `=A1 + B2 + A1` -> A1 (Color 1), B2 (Color 2), A1 (Color 1).
-- **Text Highlighting:** The references inside the input box/formula bar must be colored matching the palette.
-- **Grid Highlighting:**
-  - **Border:** Dashed border in the assigned color.
-  - **Overlay:** Semi-transparent fill (approx 30% opacity) in the assigned color.
-  - **Focus:** The overlay only appears while the reference is being "actively created/edited". Once an operator is typed, the overlay may persist or diminish, but the border remains.
-- **Focus Dimming (Optional V1.5):** When inside a function context (e.g., typing inside `SUM(...)`), external parts of the formula (`=C3+C4+`) fade out/increase opacity to emphasize the active function.
-
-### 3.4. Grid Interaction (Keyboard & Mouse)
-
-- **Mouse Click:** Clicking a cell while in **Formula Mode** inserts that cell's reference at the cursor position.
-- **Mouse Drag:** Dragging creates a range reference (e.g., `A1:B5`).
-- **Keyboard Navigation:**
-  - In **Navigation Mode**, arrow keys move a "formula cursor" on the grid.
-  - The address of the "formula cursor" replaces the reference currently being typed.
-  - `Shift + Arrow`: Creates/expands a range selection.
-
-### 3.5. Absolute References (F4)
-
-- **Trigger:** Pressing `F4` when the text cursor is on a reference.
-- **Cycling:** Cycles through 4 states:
-  1.  Relative: `C3`
-  2.  Absolute: `$C$3`
-  3.  Mixed Row: `C$3`
-  4.  Mixed Col: `$C3`
-
-### 3.6. Open-Ended Ranges
-
-- **Syntax:** `C7:C`
-- **Interpretation:** Expands to the range from C7 to the last row of column C.
-- **Visuals:** Highlights the column from C7 downwards.
+The core logic relies on distinguishing between **Typed References** (locked text) and **Pointed References** (live, replaceable selections).
 
 ---
 
-## 4. Technical Architecture Refactoring
+## 2\. User Flow & States
 
-To implement this without creating a mess in `spreadsheet.js`, we need to introduce specific modules.
+The application transitions between a global **Ready Mode** and a **Formula Building Mode**. Inside Formula Building, the app toggles between two sub-states based on the cursor context.
 
-### 4.1. New Module: `FormulaBuilder.js`
+### **2.1. Ready Mode (Idle)**
 
-A new UI controller responsible for the formula editing lifecycle.
+- **State:** The user is navigating the grid. No cell is being edited.
+- **Indicator:** Standard active cell border.
+- **Behavior:**
+  - `Arrow Keys`: Move the active cell selection.
+  - `Typing (=, +, -)`: Automatically switches to **Formula Building (Navigation Mode)**.
+  - `Typing (Text/Numbers)`: Automatically switches to **Formula Building (Editing Mode)**.
+  - `F2`: Enters **Editing Mode** (with cursor at end).
 
-- **Responsibilities:**
-  - Listens to `EditorManager` input events.
-  - Maintains the state (Navigation vs. Autocomplete).
-  - Parses the current input to identify references.
-  - Manages the color map (Ref -> Color).
-  - Directs `GridRenderer` to draw formula highlights.
+### **2.2. Formula Building Mode**
 
-### 4.2. New Module: `FunctionAutocomplete.js`
+Active whenever a cell is being edited and the content starts with `=`. It has two internal sub-states:
 
-- **Responsibilities:**
-  - Renders the DOM popup list.
-  - Filters `FunctionRegistry.list()` based on input.
-  - Handles keyboard selection events.
+#### **Sub-State A: Editing Mode (Text Input)**
 
-### 4.3. Updates to `GridRenderer.js`
+- **Trigger:** Active when the cursor is positioned after a literal (text, number, function name) or a **Typed Reference**.
+- **Behavior:**
+  - `Arrow Keys`: Move the text cursor left/right within the formula string.
+  - `Grid Interaction`: The grid is "locked" from keyboard navigation (arrows don't move selection).
+  - `Autocomplete`: Active if typing a function name.
 
-- **New Method:** `renderFormulaHighlights(highlights)`
-  - `highlights` structure: `[{ range: {minRow, maxRow...}, color: string, isFocus: boolean }]`
-  - Draws the colored dashed borders and overlay fills. This is a separate layer _above_ standard selection but _below_ the cell editor.
+#### **Sub-State B: Navigation Mode (aka "Point Mode")**
 
-### 4.4. Updates to `Tokenizer.js` / `CellHelpers.js`
-
-- **Enhanced Tokenization:** The current tokenizer is strict. We need a "loose" tokenizer or regex helper in `CellHelpers` that can identify "partial" references (e.g., `Sheet1!`) or open-ended ranges (`A:A`) specifically for the UI highlighting.
+- **Trigger:** Active when the cursor is positioned immediately after an **Operator** (`=`, `+`, `(`, `,`, etc.) or while a **Pointed Reference** is active.
+- **Behavior:**
+  - `Arrow Keys`: Move a "Virtual Selection" reticle on the grid.
+  - `Typing`: Commits the selection and switches back to Editing Mode.
 
 ---
 
-## 5. Implementation Plan
+## 3\. Functional Requirements
 
-### Phase 1: The Visual Layer (Grid Highlighting)
+### 3.1. State Machine Triggers
 
-1.  Define the 12-color palette in CSS/JS.
-2.  Implement `GridRenderer.renderFormulaHighlights`.
-3.  Create `FormulaBuilder` class that hooks into `EditorManager`.
-4.  Implement basic regex parsing to extract `A1` or `A1:B2` from the input string.
-5.  Feed these references to the renderer with colors.
+The system must evaluate the token _immediately preceding the text cursor_ to determine the sub-state.
 
-### Phase 2: Interactive Selection (Navigation Mode)
+- **Switch to Navigation Mode:**
+  - Input: Operators (`=`, `+`, `-`, `*`, `/`, `^`, `&`, `(`, `,`, `<`, `>`, `<>`).
+  - Action: Clicking any cell on the grid with the mouse (forces Navigation Mode).
+  - Action: Pressing `F2` while in Editing Mode (Standard Toggle).
+- **Switch to Editing Mode:**
+  - Input: Letters, Numbers, `$`, `"` (Quotes).
+  - Action: Pressing `F2` while in Navigation Mode.
+  - Action: Clicking inside the formula input box/bar.
+- **Exit Strategy:**
+  - `Enter` / `Tab`: Commit formula and return to Ready Mode.
+  - `Esc`: Cancel changes and return to Ready Mode.
+  - `Backspace` on empty `=`: Return to Ready Mode.
 
-1.  Modify `spreadsheet.js` keydown handler. If `FormulaBuilder.isActive()`:
-    - Intercept arrow keys.
-    - Move a virtual selection.
-    - Update the `EditorManager` input value by splicing in the new reference.
+### 3.2. Reference Origin Logic (The "Secret Sauce")
 
-### Phase 3: Autocomplete
+To replicate Excel's feel, the Formula Builder must track the **Origin** of the current reference token being edited.
 
-1.  Implement `FunctionAutocomplete` class.
-2.  Wire it into `FormulaBuilder`.
-3.  Handle `Tab` key to insert function templates.
+| Origin Type | Definition                                   | Visual Cue                                   | Behavior on Click/Navigate                                                                                       |
+| :---------- | :------------------------------------------- | :------------------------------------------- | :--------------------------------------------------------------------------------------------------------------- |
+| **POINTED** | Created via Mouse Click or Arrow Navigation. | **"Dancing Ants"** (Animated dashed border). | **REPLACE:** Clicking another cell replaces this reference (e.g., `=A1` becomes `=B1`).                          |
+| **TYPED**   | Manually typed by the user (e.g., "A", "1"). | **Solid Line** (Colored border).             | **COMMIT:** Clicking another cell _commits_ this text and moves selection away (unless an operator is appended). |
 
-### Phase 4: Advanced References
+- **Lifecycle:** A `POINTED` reference becomes `TYPED` (Locked) the moment the user types an operator (e.g., `+`) after it.
 
-1.  Implement `F4` cycling logic (string manipulation at cursor index).
-2.  Implement `C7:C` open-ended range expansion logic in `CellHelpers`.
+### 3.3. Live Visual Feedback (Refined)
 
-## 6. Corner Cases & Risks
+- **Tokenization:** On every keystroke, the input string is parsed to identify all references.
+- **Color Palette:** A fixed 12-color palette is assigned sequentially to unique references (e.g., `A1` is Blue, `B2` is Red).
+- **Rendering Layers:**
+  1.  **Text Color:** References inside the editor/formula bar text are colored.
+  2.  **Grid Border:**
+      - If `POINTED`: Animated "Dancing Ants" border in assigned color.
+      - If `TYPED`: Solid colored border.
+  3.  **Grid Overlay:** A semi-transparent fill (30% opacity) matches the border color.
+      - _Focus Logic:_ The overlay appears _only_ for the reference currently under the cursor (or being created). Other references show borders only.
+- **Function Context Dimming:** (Optional V1) When typing inside `SUM(...)`, parts of the formula outside the parentheses fade slightly to emphasize the active function context.
 
-- **Performance:** Parsing and rendering highlights on _every_ keystroke. Mitigation: Use a lightweight regex parser for UI feedback, not the full AST parser.
-- **Z-Index:** Ensure formula highlights don't obscure the active cell editor text.
-- **Scrolling:** Autocomplete popup must stay visible even if the cell is near the bottom edge (pop up instead of down).
+### 3.4. Autocomplete (Sub-Feature of Editing Mode)
+
+- **Trigger:** Typing a letter (A-Z).
+- **UI:** A popup list appears anchored to the cell or formula bar.
+- **Keyboard Override:**
+  - `Up`/`Down`: Cycle selection (Looping).
+  - `Tab`: Inserts function name + `(`, switches to Navigation Mode.
+  - `Left`/`Right`: Still move text cursor (closes popup).
+
+### 3.5. Mouse & Keyboard Interactions
+
+- **Mouse Click (Grid):**
+  - Always forces **Navigation Mode**.
+  - Inserts a `POINTED` reference at the cursor position.
+  - If the cursor was on a `POINTED` reference, it **replaces** it.
+  - If the cursor was on a `TYPED` reference (with no trailing operator), it behaves as a **Commit** (saves cell, moves selection).
+- **Mouse Drag:** Creates a Range Reference (`A1:B5`). The token origin is `POINTED`.
+- **Shift + Arrows:** Expands the current `POINTED` selection into a range.
+
+### 3.6. Advanced References
+
+- **F4 Toggle:** Cycles reference types (`A1` -\> `$A$1` -\> `A$1` -\> `$A1`).
+  - Works on both `POINTED` and `TYPED` references.
+- **Open-Ended Ranges:** Support for `A1:A` (Range to bottom of column).
+  - Visuals: Highlight the entire column column starting from A1.
+
+---
+
+## 4\. Technical Architecture Updates
+
+### 4.1. `FormulaBuilder.js` (New Controller)
+
+This class manages the complex state machine.
+
+```javascript
+class FormulaBuilder {
+  constructor(editorManager, gridRenderer) {
+    this.state = {
+      mode: 'EDITING', // or 'NAVIGATION'
+      activeToken: null, // { type: 'REF', value: 'A1', origin: 'POINTED' }
+      autocompleteVisible: false,
+    };
+  }
+  // Handles input events, parses tokens, manages colors
+}
+```
+
+### 4.2. `FormulaTokenizer` (Lightweight)
+
+A dedicated, lightweight tokenizer (regex-based) is needed for the UI thread. The full Engine Tokenizer is too heavy/async for keystroke-level visuals.
+
+- **Responsibility:** Extract references, ranges, and operators efficiently for highlighting.
+
+### 4.3. `GridRenderer` Updates
+
+- **`renderFormulaHighlights(highlights)`**:
+  - `highlights`: Array of `{ range, color, style: 'SOLID' | 'DASHED' | 'ANTS', showOverlay: boolean }`.
+  - This method draws the visual layer above the grid but below the editor.
+
+---
+
+## 5\. Implementation Plan
+
+1.  **Visual Layer:** Implement the 12-color palette and `renderFormulaHighlights` in `GridRenderer`.
+2.  **State Controller:** Build `FormulaBuilder.js` to hook into `EditorManager` events (`input`, `keydown`).
+3.  **Parsing:** Implement the lightweight regex parser to drive colors.
+4.  **Navigation Logic:** Implement the `Arrow Key` interception logic in `FormulaBuilder`.
+5.  **Origin Logic:** Implement the `POINTED` vs `TYPED` distinction to handle the "Replace vs. Append" behavior correctly.
+6.  **Autocomplete:** Build the `FunctionAutocomplete` UI module.
