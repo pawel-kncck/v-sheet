@@ -284,24 +284,19 @@ describe('UpdateCellsCommand', () => {
       });
     });
 
-    it('handles undefined values', () => {
-      const command = new UpdateCellsCommand({
-        cellUpdates: [{ cellId: 'A1', newValue: undefined, oldValue: 'test' }],
-        fileManager: mockFileManager,
-        formulaWorker: mockWorker,
-      });
+    it('handles undefined values (skips update)', () => {
+  const command = new UpdateCellsCommand({
+    cellUpdates: [{ cellId: 'A1', newValue: undefined, oldValue: 'test' }],
+    fileManager: mockFileManager,
+    formulaWorker: mockWorker,
+  });
 
-      command.execute();
+  command.execute();
 
-      expect(mockFileManager.updateCellData).toHaveBeenCalledWith(
-        'A1',
-        undefined
-      );
-      expect(mockWorker.postMessage).toHaveBeenCalledWith({
-        type: 'clearCell',
-        payload: { cellId: 'A1' },
-      });
-    });
+  // undefined means "no change" - fileManager and worker should NOT be called
+  expect(mockFileManager.updateCellData).not.toHaveBeenCalled();
+  expect(mockWorker.postMessage).not.toHaveBeenCalled();
+});
 
     it('handles boolean values', () => {
       const command = new UpdateCellsCommand({

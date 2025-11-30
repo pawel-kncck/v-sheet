@@ -194,6 +194,8 @@ export class Toolbar {
 
       btn.addEventListener('click', (e) => {
         if (item.action) item.action(e);
+        // Refocus grid so keyboard shortcuts work immediately
+        this.spreadsheet.renderer.cellGridContainer.focus();
       });
 
       this.container.appendChild(btn);

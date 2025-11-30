@@ -13,17 +13,25 @@ export class UpdateCellsCommand extends Command {
    * @param {GridRenderer} params.renderer - Required for visual style updates
    */
   constructor({ cellUpdates, fileManager, formulaWorker, renderer }) {
-    super();
+  super();
 
-    if (!cellUpdates || cellUpdates.length === 0) {
-      throw new Error('UpdateCellsCommand requires at least one cell update');
-    }
-
-    this.cellUpdates = cellUpdates;
-    this.fileManager = fileManager;
-    this.formulaWorker = formulaWorker;
-    this.renderer = renderer;
+  if (!cellUpdates || cellUpdates.length === 0) {
+    throw new Error('UpdateCellsCommand requires at least one cell update');
   }
+  
+  if (!fileManager) {
+    throw new Error('UpdateCellsCommand requires fileManager');
+  }
+  
+  if (!formulaWorker) {
+    throw new Error('UpdateCellsCommand requires formulaWorker');
+  }
+
+  this.cellUpdates = cellUpdates;
+  this.fileManager = fileManager;
+  this.formulaWorker = formulaWorker;
+  this.renderer = renderer;
+}
 
   execute() {
     this._applyUpdates('newValue', 'newStyle');

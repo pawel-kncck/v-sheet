@@ -433,20 +433,20 @@ export class Spreadsheet {
       finalStyle = JSON.parse(JSON.stringify(styleChanges));
 
       const toggleRecursive = (target, source) => {
-        for (const key in target) {
-          if (typeof target[key] === 'object' && target[key] !== null) {
-            if (source && source[key]) {
-              toggleRecursive(target[key], source[key]);
-            }
+      for (const key in target) {
+        if (typeof target[key] === 'object' && target[key] !== null) {
+          // Always recurse into nested objects, passing source[key] if it exists
+          toggleRecursive(target[key], source ? source[key] : undefined);
+        } else {
+          // Toggle: turn OFF if source has it, turn ON if source doesn't
+          if (source && source[key]) {
+            target[key] = false;
           } else {
-            if (source && source[key]) {
-              target[key] = false;
-            } else {
-              target[key] = true;
-            }
+            target[key] = true;
           }
         }
-      };
+      }
+    };
       toggleRecursive(finalStyle, activeStyle);
     }
 
