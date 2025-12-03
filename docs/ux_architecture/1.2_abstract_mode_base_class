@@ -1,0 +1,975 @@
+# Step-by-Step Implementation: Chunk 1.2 – AbstractMode Base Class
+
+## Objective
+
+Create `js/modes/AbstractMode.js` – the base class that defines the interface contract for all mode strategies. This establishes the foundation for the Strategy Pattern that will power the entire state management system.
+
+---
+
+## Prerequisites
+
+- Completed Chunk 1.1 (Intents.js exists and tests pass)
+- Understanding of the Strategy Pattern
+- Familiarity with ES6 class syntax
+
+---
+
+## Step 1: Create the File with Header Documentation
+
+**Action:** Create `js/modes/AbstractMode.js` with comprehensive documentation.
+
+```javascript
+/**
+ * AbstractMode.js
+ * 
+ * Base class for all application modes (Ready, Edit, Enter, Point, etc.).
+ * 
+ * This implements the Strategy Pattern: each mode encapsulates a specific
+ * set of behaviors for handling user intents. The ModeManager delegates
+ * intent handling to the currently active mode.
+ * 
+ * ## Lifecycle
+ * 
+ * 1. Mode is instantiated by ModeManager (once, then cached)
+ * 2. `onEnter(payload)` is called when mode becomes active
+ * 3. `handleIntent(intent, context)` is called for each user action
+ * 4. `onExit()` is called when switching to another mode
+ * 
+ * ## Subclass Contract
+ * 
+ * Concrete modes MUST:
+ * - Call `super(context)` in constructor
+ * - Override `getName()` to return a unique identifier
+ * 
+ * Concrete modes SHOULD:
+ * - Override `handleIntent()` to handle mode-specific intents
+ * - Override `onEnter()` if setup is needed (e.g., showing editor)
+ * - Override `onExit()` if cleanup is needed (e.g., committing changes)
+ * 
+ * @module modes/AbstractMode
+ */
+
+import { Logger } from '../engine/utils/Logger.js';
+```
+
+**Rationale:** Comprehensive documentation helps developers understand how to implement concrete modes. The lifecycle explanation is crucial for correct mode implementation.
+
+---
+
+## Step 2: Define the Constructor with Dependency Injection
+
+**Action:** Add the constructor that receives all application services.
+
+```javascript
+/**
+ * Base class for all application modes.
+ * @abstract
+ */
+export class AbstractMode {
+  /**
+   * Creates a new mode instance.
+   * 
+   * @param {Object} context - Application services and dependencies
+   * @param {SelectionManager} context.selectionManager - Manages cell selection state
+   * @param {EditorManager} context.editorManager - Manages cell editing UI
+   * @param {HistoryManager} context.historyManager - Manages undo/redo stack
+   * @param {FileManager} context.fileManager - Manages file persistence
+   * @param {Worker} context.formulaWorker - Web Worker for formula calculation
+   * @param {GridRenderer} context.renderer - Renders the grid UI
+   * @param {Function} context.switchMode - Callback to request mode transition
+   */
+  constructor(context) {
+    if (new.target === AbstractMode) {
+      throw new Error('AbstractMode is abstract and cannot be instantiated directly');
+    }
+
+    if (!context) {
+      throw new Error('AbstractMode requires a context object');
+    }
+
+    // Store all dependencies as protected properties
+    // (JavaScript doesn't have true protected, but underscore prefix is convention)
+    
+    /** @protected */
+    this._selectionManager = context.selectionManager;
+    
+    /** @protected */
+    this._editorManager = context.editorManager;
+    
+    /** @protected */
+    this._historyManager = context.historyManager;
+    
+    /** @protected */
+    this._fileManager = context.fileManager;
+    
+    /** @protected */
+    this._formulaWorker = context.formulaWorker;
+    
+    /** @protected */
+    this._renderer = context.renderer;
+    
+    /** @protected */
+    this._switchMode = context.switchMode;
+
+    // Store full context for subclasses that may need additional services
+    /** @protected */
+    this._context = context;
+
+    Logger.log('AbstractMode', `${this.constructor.name} instantiated`);
+  }
+```
+
+**Rationale:**
+
+- **Abstract enforcement:** `new.target` check prevents direct instantiation
+- **Dependency injection:** All services passed in, not created internally (testable, flexible)
+- **Protected convention:** Underscore prefix signals these are for subclass use
+- **Context preservation:** Subclasses may need services not explicitly listed
+
+---
+
+## Step 3: Define the getName() Method
+
+**Action:** Add the abstract method for mode identification.
+
+```javascript
+  /**
+   * Returns the unique identifier for this mode.
+   * 
+   * Used for:
+   * - Logging and debugging
+   * - UI status display (e.g., "Ready", "Edit", "Point")
+   * - Mode registration in ModeManager
+   * 
+   * @abstract
+   * @returns {string} Mode identifier (e.g., 'ready', 'edit', 'point')
+   */
+  getName() {
+    throw new Error(`${this.constructor.name} must implement getName()`);
+  }
+```
+
+**Rationale:** Every mode needs a name for debugging, logging, and UI display. Making this abstract (throws if not overridden) enforces the contract.
+
+---
+
+## Step 4: Define the onEnter() Lifecycle Hook
+
+**Action:** Add the entry lifecycle method.
+
+```javascript
+  /**
+   * Called when this mode becomes the active mode.
+   * 
+   * Override this to perform setup actions such as:
+   * - Showing UI elements (e.g., cell editor)
+   * - Setting initial state
+   * - Registering temporary event listeners
+   * 
+   * @param {*} [payload] - Optional data passed from the previous mode or trigger
+   * 
+   * @example
+   * // EditMode might receive the cell to edit
+   * onEnter({ cellId: 'A1', initialValue: 'Hello' }) {
+   *   this._editorManager.startEdit(cellId, initialValue);
+   * }
+   * 
+   * @example
+   * // PointMode might receive the formula builder context
+   * onEnter({ formulaBuilder, insertPosition }) {
+   *   this._formulaBuilder = formulaBuilder;
+   * }
+   */
+  onEnter(payload) {
+    // Default implementation: log entry (subclasses override for actual behavior)
+    Logger.log(this.getName(), `Entering mode`, payload ? { payload } : '');
+  }
+```
+
+**Rationale:**
+
+- **Default implementation:** Logging helps with debugging; subclasses override for real behavior
+- **Payload flexibility:** Different modes need different entry data
+- **Examples in JSDoc:** Shows concrete usage patterns for implementers
+
+---
+
+## Step 5: Define the onExit() Lifecycle Hook
+
+**Action:** Add the exit lifecycle method.
+
+```javascript
+  /**
+   * Called when this mode is being deactivated (another mode is becoming active).
+   * 
+   * Override this to perform cleanup actions such as:
+   * - Hiding UI elements
+   * - Committing pending changes
+   * - Removing temporary event listeners
+   * 
+   * IMPORTANT: This is called BEFORE onEnter() of the next mode.
+   * 
+   * @example
+   * // EditMode should commit changes before exiting
+   * onExit() {
+   *   if (this._hasUnsavedChanges) {
+   *     this._commitEdit();
+   *   }
+   *   this._editorManager.hideEditor();
+   * }
+   */
+  onExit() {
+    // Default implementation: log exit (subclasses override for actual behavior)
+    Logger.log(this.getName(), `Exiting mode`);
+  }
+```
+
+**Rationale:**
+
+- **Safety net:** Modes can ensure data isn't lost on unexpected transitions
+- **Order guarantee:** Documented that onExit is called before next mode's onEnter
+- **Clean separation:** Each mode manages its own cleanup
+
+---
+
+## Step 6: Define the handleIntent() Core Method
+
+**Action:** Add the main intent handling method.
+
+```javascript
+  /**
+   * Handles a semantic intent from the InputController.
+   * 
+   * This is the core method of the Strategy Pattern. The ModeManager calls
+   * this method on the active mode for every user action.
+   * 
+   * ## Return Value Contract
+   * 
+   * - Return `true` if the intent was handled (consumed)
+   * - Return `false` if the intent was NOT handled
+   * 
+   * When `false` is returned:
+   * - InputController will NOT call preventDefault()
+   * - Browser default behavior will occur (e.g., text input in editor)
+   * 
+   * This is crucial for EditMode: by returning `false` for NAVIGATE intents,
+   * arrow keys move the text cursor instead of the cell selection.
+   * 
+   * @param {string} intent - The intent identifier from INTENTS enum
+   * @param {Object} [context] - Additional data about the intent
+   * @returns {boolean} True if handled, false to allow default behavior
+   * 
+   * @example
+   * // ReadyMode handles navigation
+   * handleIntent(intent, context) {
+   *   if (intent === INTENTS.NAVIGATE) {
+   *     this._selectionManager.moveSelection(context.direction, context.shift);
+   *     return true;
+   *   }
+   *   return false;
+   * }
+   * 
+   * @example
+   * // EditMode ignores navigation (allows text cursor movement)
+   * handleIntent(intent, context) {
+   *   if (intent === INTENTS.NAVIGATE) {
+   *     return false; // Let browser handle arrow keys in text input
+   *   }
+   *   if (intent === INTENTS.COMMIT) {
+   *     this._commitEdit();
+   *     return true;
+   *   }
+   *   return false;
+   * }
+   */
+  handleIntent(intent, context) {
+    // Default implementation: log unhandled intent and return false
+    Logger.log(this.getName(), `Unhandled intent: ${intent}`, context || '');
+    return false;
+  }
+```
+
+**Rationale:**
+
+- **Return value is critical:** The true/false return controls event propagation
+- **EditMode example:** Illustrates the "switch" between grid and text navigation
+- **Default false:** Unhandled intents should fall through to browser defaults
+
+---
+
+## Step 7: Add Helper Method for Mode Switching
+
+**Action:** Add a protected helper for requesting mode transitions.
+
+```javascript
+  /**
+   * Requests a transition to another mode.
+   * 
+   * This is a convenience wrapper around the switchMode callback.
+   * Subclasses should call this instead of directly manipulating mode state.
+   * 
+   * @protected
+   * @param {string} modeName - Name of the mode to switch to
+   * @param {*} [payload] - Data to pass to the new mode's onEnter()
+   * 
+   * @example
+   * // ReadyMode switches to EditMode when user presses F2
+   * _handleEditStart() {
+   *   const cellId = this._selectionManager.getActiveCellId();
+   *   const value = this._fileManager.getRawCellValue(cellId);
+   *   this._requestModeSwitch('edit', { cellId, initialValue: value });
+   * }
+   */
+  _requestModeSwitch(modeName, payload) {
+    if (!this._switchMode) {
+      Logger.warn(this.getName(), 'Cannot switch mode: switchMode callback not provided');
+      return;
+    }
+    
+    Logger.log(this.getName(), `Requesting switch to "${modeName}"`, payload ? { payload } : '');
+    this._switchMode(modeName, payload);
+  }
+```
+
+**Rationale:**
+
+- **Encapsulation:** Modes don't directly access ModeManager
+- **Logging:** All transitions are logged for debugging
+- **Safety check:** Graceful handling if callback isn't provided
+
+---
+
+## Step 8: Add Helper Methods for Common Operations
+
+**Action:** Add protected helpers that subclasses will commonly need.
+
+```javascript
+  /**
+   * Gets the currently active cell ID.
+   * 
+   * @protected
+   * @returns {string|null} Cell ID like "A1" or null if none selected
+   */
+  _getActiveCellId() {
+    return this._selectionManager?.getActiveCellId() || null;
+  }
+
+  /**
+   * Gets the raw value (formula string or text) for a cell.
+   * 
+   * @protected
+   * @param {string} cellId - The cell ID
+   * @returns {string} The raw value or empty string
+   */
+  _getCellValue(cellId) {
+    return this._fileManager?.getRawCellValue(cellId) || '';
+  }
+
+  /**
+   * Executes a cell update through the history system.
+   * 
+   * This ensures the update is undoable.
+   * 
+   * @protected
+   * @param {string} cellId - The cell to update
+   * @param {string} newValue - The new value
+   */
+  _executeCellUpdate(cellId, newValue) {
+    if (!this._context.executeCellUpdate) {
+      Logger.warn(this.getName(), 'executeCellUpdate not available in context');
+      return;
+    }
+    this._context.executeCellUpdate(cellId, newValue);
+  }
+}
+```
+
+**Rationale:**
+
+- **DRY principle:** These operations are used by multiple modes
+- **Null safety:** Defensive checks prevent crashes if dependencies missing
+- **Abstraction:** Modes don't need to know the exact service APIs
+
+---
+
+## Step 9: Close the Class and Add Module Export
+
+The class is already exported with `export class AbstractMode`. Ensure the file ends properly:
+
+```javascript
+// End of AbstractMode class
+```
+
+---
+
+## Step 10: Create the Unit Test File
+
+**Action:** Create `tests/modes/AbstractMode.test.js`.
+
+```javascript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AbstractMode } from '../../js/modes/AbstractMode.js';
+
+// Concrete implementation for testing
+class TestMode extends AbstractMode {
+  getName() {
+    return 'test';
+  }
+}
+
+// Another concrete implementation to test different behaviors
+class CustomMode extends AbstractMode {
+  constructor(context) {
+    super(context);
+    this.enterCalled = false;
+    this.exitCalled = false;
+    this.lastPayload = null;
+  }
+
+  getName() {
+    return 'custom';
+  }
+
+  onEnter(payload) {
+    super.onEnter(payload);
+    this.enterCalled = true;
+    this.lastPayload = payload;
+  }
+
+  onExit() {
+    super.onExit();
+    this.exitCalled = true;
+  }
+
+  handleIntent(intent, context) {
+    if (intent === 'TEST_INTENT') {
+      return true;
+    }
+    return super.handleIntent(intent, context);
+  }
+}
+
+describe('AbstractMode', () => {
+  let mockContext;
+
+  beforeEach(() => {
+    mockContext = {
+      selectionManager: {
+        getActiveCellId: vi.fn().mockReturnValue('A1'),
+        moveSelection: vi.fn(),
+      },
+      editorManager: {
+        startEdit: vi.fn(),
+        commitEdit: vi.fn(),
+      },
+      historyManager: {
+        execute: vi.fn(),
+      },
+      fileManager: {
+        getRawCellValue: vi.fn().mockReturnValue('test value'),
+        updateCellData: vi.fn(),
+      },
+      formulaWorker: {
+        postMessage: vi.fn(),
+      },
+      renderer: {
+        getCellElement: vi.fn(),
+      },
+      switchMode: vi.fn(),
+      executeCellUpdate: vi.fn(),
+    };
+  });
+
+  describe('Constructor', () => {
+    it('should throw when instantiated directly', () => {
+      expect(() => new AbstractMode(mockContext)).toThrow(
+        'AbstractMode is abstract and cannot be instantiated directly'
+      );
+    });
+
+    it('should throw when context is missing', () => {
+      expect(() => new TestMode()).toThrow('AbstractMode requires a context object');
+      expect(() => new TestMode(null)).toThrow('AbstractMode requires a context object');
+    });
+
+    it('should allow instantiation of subclasses', () => {
+      const mode = new TestMode(mockContext);
+      expect(mode).toBeInstanceOf(AbstractMode);
+      expect(mode).toBeInstanceOf(TestMode);
+    });
+
+    it('should store all context dependencies', () => {
+      const mode = new TestMode(mockContext);
+      expect(mode._selectionManager).toBe(mockContext.selectionManager);
+      expect(mode._editorManager).toBe(mockContext.editorManager);
+      expect(mode._historyManager).toBe(mockContext.historyManager);
+      expect(mode._fileManager).toBe(mockContext.fileManager);
+      expect(mode._formulaWorker).toBe(mockContext.formulaWorker);
+      expect(mode._renderer).toBe(mockContext.renderer);
+      expect(mode._switchMode).toBe(mockContext.switchMode);
+      expect(mode._context).toBe(mockContext);
+    });
+  });
+
+  describe('getName()', () => {
+    it('should throw if not overridden', () => {
+      // Create a minimal subclass that doesn't override getName
+      class IncompleteMode extends AbstractMode {}
+      
+      const mode = new IncompleteMode(mockContext);
+      expect(() => mode.getName()).toThrow('IncompleteMode must implement getName()');
+    });
+
+    it('should return mode name when overridden', () => {
+      const mode = new TestMode(mockContext);
+      expect(mode.getName()).toBe('test');
+    });
+  });
+
+  describe('onEnter()', () => {
+    it('should be callable without payload', () => {
+      const mode = new TestMode(mockContext);
+      expect(() => mode.onEnter()).not.toThrow();
+    });
+
+    it('should be callable with payload', () => {
+      const mode = new TestMode(mockContext);
+      expect(() => mode.onEnter({ cellId: 'A1' })).not.toThrow();
+    });
+
+    it('should allow subclasses to receive payload', () => {
+      const mode = new CustomMode(mockContext);
+      const payload = { cellId: 'B2', value: 'test' };
+      
+      mode.onEnter(payload);
+      
+      expect(mode.enterCalled).toBe(true);
+      expect(mode.lastPayload).toEqual(payload);
+    });
+  });
+
+  describe('onExit()', () => {
+    it('should be callable', () => {
+      const mode = new TestMode(mockContext);
+      expect(() => mode.onExit()).not.toThrow();
+    });
+
+    it('should allow subclasses to perform cleanup', () => {
+      const mode = new CustomMode(mockContext);
+      
+      mode.onExit();
+      
+      expect(mode.exitCalled).toBe(true);
+    });
+  });
+
+  describe('handleIntent()', () => {
+    it('should return false by default (unhandled)', () => {
+      const mode = new TestMode(mockContext);
+      const result = mode.handleIntent('UNKNOWN_INTENT', {});
+      expect(result).toBe(false);
+    });
+
+    it('should allow subclasses to handle specific intents', () => {
+      const mode = new CustomMode(mockContext);
+      
+      const handled = mode.handleIntent('TEST_INTENT', {});
+      const unhandled = mode.handleIntent('OTHER_INTENT', {});
+      
+      expect(handled).toBe(true);
+      expect(unhandled).toBe(false);
+    });
+  });
+
+  describe('_requestModeSwitch()', () => {
+    it('should call switchMode callback with name and payload', () => {
+      const mode = new TestMode(mockContext);
+      const payload = { cellId: 'A1' };
+      
+      mode._requestModeSwitch('edit', payload);
+      
+      expect(mockContext.switchMode).toHaveBeenCalledWith('edit', payload);
+    });
+
+    it('should call switchMode without payload when not provided', () => {
+      const mode = new TestMode(mockContext);
+      
+      mode._requestModeSwitch('ready');
+      
+      expect(mockContext.switchMode).toHaveBeenCalledWith('ready', undefined);
+    });
+
+    it('should handle missing switchMode callback gracefully', () => {
+      const contextWithoutSwitch = { ...mockContext, switchMode: null };
+      const mode = new TestMode(contextWithoutSwitch);
+      
+      // Should not throw
+      expect(() => mode._requestModeSwitch('edit')).not.toThrow();
+    });
+  });
+
+  describe('_getActiveCellId()', () => {
+    it('should return active cell ID from selection manager', () => {
+      const mode = new TestMode(mockContext);
+      
+      const cellId = mode._getActiveCellId();
+      
+      expect(cellId).toBe('A1');
+      expect(mockContext.selectionManager.getActiveCellId).toHaveBeenCalled();
+    });
+
+    it('should return null if selection manager is missing', () => {
+      const contextWithoutSelection = { ...mockContext, selectionManager: null };
+      const mode = new TestMode(contextWithoutSelection);
+      
+      const cellId = mode._getActiveCellId();
+      
+      expect(cellId).toBeNull();
+    });
+  });
+
+  describe('_getCellValue()', () => {
+    it('should return cell value from file manager', () => {
+      const mode = new TestMode(mockContext);
+      
+      const value = mode._getCellValue('A1');
+      
+      expect(value).toBe('test value');
+      expect(mockContext.fileManager.getRawCellValue).toHaveBeenCalledWith('A1');
+    });
+
+    it('should return empty string if file manager is missing', () => {
+      const contextWithoutFile = { ...mockContext, fileManager: null };
+      const mode = new TestMode(contextWithoutFile);
+      
+      const value = mode._getCellValue('A1');
+      
+      expect(value).toBe('');
+    });
+  });
+
+  describe('_executeCellUpdate()', () => {
+    it('should call context.executeCellUpdate', () => {
+      const mode = new TestMode(mockContext);
+      
+      mode._executeCellUpdate('A1', 'new value');
+      
+      expect(mockContext.executeCellUpdate).toHaveBeenCalledWith('A1', 'new value');
+    });
+
+    it('should handle missing executeCellUpdate gracefully', () => {
+      const contextWithoutUpdate = { ...mockContext, executeCellUpdate: null };
+      const mode = new TestMode(contextWithoutUpdate);
+      
+      // Should not throw
+      expect(() => mode._executeCellUpdate('A1', 'value')).not.toThrow();
+    });
+  });
+});
+
+describe('AbstractMode - Inheritance Pattern', () => {
+  it('should support multiple levels of inheritance', () => {
+    class BaseNavigationMode extends AbstractMode {
+      getName() {
+        return 'base-nav';
+      }
+
+      handleIntent(intent, context) {
+        if (intent === 'NAVIGATE') {
+          return true;
+        }
+        return super.handleIntent(intent, context);
+      }
+    }
+
+    class ReadyMode extends BaseNavigationMode {
+      getName() {
+        return 'ready';
+      }
+
+      handleIntent(intent, context) {
+        if (intent === 'EDIT_START') {
+          return true;
+        }
+        return super.handleIntent(intent, context);
+      }
+    }
+
+    const mockContext = {
+      selectionManager: {},
+      editorManager: {},
+      historyManager: {},
+      fileManager: {},
+      formulaWorker: {},
+      renderer: {},
+      switchMode: vi.fn(),
+    };
+
+    const mode = new ReadyMode(mockContext);
+
+    // ReadyMode should handle its own intent
+    expect(mode.handleIntent('EDIT_START', {})).toBe(true);
+    
+    // ReadyMode should inherit navigation handling from BaseNavigationMode
+    expect(mode.handleIntent('NAVIGATE', {})).toBe(true);
+    
+    // Unknown intents should return false
+    expect(mode.handleIntent('UNKNOWN', {})).toBe(false);
+    
+    // Name should be from the concrete class
+    expect(mode.getName()).toBe('ready');
+  });
+});
+```
+
+---
+
+## Step 11: Run the Tests
+
+**Action:** Execute the test suite to verify implementation.
+
+```bash
+npm test -- tests/modes/AbstractMode.test.js
+```
+
+**Expected Result:** All tests pass.
+
+---
+
+## Step 12: Verify No Breaking Changes
+
+**Action:** Run the full test suite.
+
+```bash
+npm test
+npm run e2e
+```
+
+**Expected Result:** All existing tests still pass. This file is additive only.
+
+---
+
+## Final File Structure
+
+After completing this chunk:
+
+```
+js/
+├── modes/
+│   ├── Intents.js          ← From Chunk 1.1
+│   └── AbstractMode.js     ← NEW
+├── engine/
+├── history/
+├── ui/
+└── spreadsheet.js
+
+tests/
+├── modes/
+│   ├── Intents.test.js     ← From Chunk 1.1
+│   └── AbstractMode.test.js ← NEW
+├── engine/
+├── history/
+└── ui/
+```
+
+---
+
+## Complete Source File
+
+For reference, here's the complete `js/modes/AbstractMode.js`:
+
+```javascript
+/**
+ * AbstractMode.js
+ * 
+ * Base class for all application modes (Ready, Edit, Enter, Point, etc.).
+ * 
+ * This implements the Strategy Pattern: each mode encapsulates a specific
+ * set of behaviors for handling user intents. The ModeManager delegates
+ * intent handling to the currently active mode.
+ * 
+ * ## Lifecycle
+ * 
+ * 1. Mode is instantiated by ModeManager (once, then cached)
+ * 2. `onEnter(payload)` is called when mode becomes active
+ * 3. `handleIntent(intent, context)` is called for each user action
+ * 4. `onExit()` is called when switching to another mode
+ * 
+ * ## Subclass Contract
+ * 
+ * Concrete modes MUST:
+ * - Call `super(context)` in constructor
+ * - Override `getName()` to return a unique identifier
+ * 
+ * Concrete modes SHOULD:
+ * - Override `handleIntent()` to handle mode-specific intents
+ * - Override `onEnter()` if setup is needed (e.g., showing editor)
+ * - Override `onExit()` if cleanup is needed (e.g., committing changes)
+ * 
+ * @module modes/AbstractMode
+ */
+
+import { Logger } from '../engine/utils/Logger.js';
+
+/**
+ * Base class for all application modes.
+ * @abstract
+ */
+export class AbstractMode {
+  /**
+   * Creates a new mode instance.
+   * 
+   * @param {Object} context - Application services and dependencies
+   * @param {SelectionManager} context.selectionManager - Manages cell selection state
+   * @param {EditorManager} context.editorManager - Manages cell editing UI
+   * @param {HistoryManager} context.historyManager - Manages undo/redo stack
+   * @param {FileManager} context.fileManager - Manages file persistence
+   * @param {Worker} context.formulaWorker - Web Worker for formula calculation
+   * @param {GridRenderer} context.renderer - Renders the grid UI
+   * @param {Function} context.switchMode - Callback to request mode transition
+   */
+  constructor(context) {
+    if (new.target === AbstractMode) {
+      throw new Error('AbstractMode is abstract and cannot be instantiated directly');
+    }
+
+    if (!context) {
+      throw new Error('AbstractMode requires a context object');
+    }
+
+    /** @protected */
+    this._selectionManager = context.selectionManager;
+    
+    /** @protected */
+    this._editorManager = context.editorManager;
+    
+    /** @protected */
+    this._historyManager = context.historyManager;
+    
+    /** @protected */
+    this._fileManager = context.fileManager;
+    
+    /** @protected */
+    this._formulaWorker = context.formulaWorker;
+    
+    /** @protected */
+    this._renderer = context.renderer;
+    
+    /** @protected */
+    this._switchMode = context.switchMode;
+
+    /** @protected */
+    this._context = context;
+
+    Logger.log('AbstractMode', `${this.constructor.name} instantiated`);
+  }
+
+  /**
+   * Returns the unique identifier for this mode.
+   * 
+   * @abstract
+   * @returns {string} Mode identifier (e.g., 'ready', 'edit', 'point')
+   */
+  getName() {
+    throw new Error(`${this.constructor.name} must implement getName()`);
+  }
+
+  /**
+   * Called when this mode becomes the active mode.
+   * 
+   * @param {*} [payload] - Optional data passed from the previous mode or trigger
+   */
+  onEnter(payload) {
+    Logger.log(this.getName(), `Entering mode`, payload ? { payload } : '');
+  }
+
+  /**
+   * Called when this mode is being deactivated.
+   */
+  onExit() {
+    Logger.log(this.getName(), `Exiting mode`);
+  }
+
+  /**
+   * Handles a semantic intent from the InputController.
+   * 
+   * @param {string} intent - The intent identifier from INTENTS enum
+   * @param {Object} [context] - Additional data about the intent
+   * @returns {boolean} True if handled, false to allow default behavior
+   */
+  handleIntent(intent, context) {
+    Logger.log(this.getName(), `Unhandled intent: ${intent}`, context || '');
+    return false;
+  }
+
+  /**
+   * Requests a transition to another mode.
+   * 
+   * @protected
+   * @param {string} modeName - Name of the mode to switch to
+   * @param {*} [payload] - Data to pass to the new mode's onEnter()
+   */
+  _requestModeSwitch(modeName, payload) {
+    if (!this._switchMode) {
+      Logger.warn(this.getName(), 'Cannot switch mode: switchMode callback not provided');
+      return;
+    }
+    
+    Logger.log(this.getName(), `Requesting switch to "${modeName}"`, payload ? { payload } : '');
+    this._switchMode(modeName, payload);
+  }
+
+  /**
+   * Gets the currently active cell ID.
+   * 
+   * @protected
+   * @returns {string|null} Cell ID like "A1" or null if none selected
+   */
+  _getActiveCellId() {
+    return this._selectionManager?.getActiveCellId() || null;
+  }
+
+  /**
+   * Gets the raw value (formula string or text) for a cell.
+   * 
+   * @protected
+   * @param {string} cellId - The cell ID
+   * @returns {string} The raw value or empty string
+   */
+  _getCellValue(cellId) {
+    return this._fileManager?.getRawCellValue(cellId) || '';
+  }
+
+  /**
+   * Executes a cell update through the history system.
+   * 
+   * @protected
+   * @param {string} cellId - The cell to update
+   * @param {string} newValue - The new value
+   */
+  _executeCellUpdate(cellId, newValue) {
+    if (!this._context.executeCellUpdate) {
+      Logger.warn(this.getName(), 'executeCellUpdate not available in context');
+      return;
+    }
+    this._context.executeCellUpdate(cellId, newValue);
+  }
+}
+```
+
+---
+
+## Checklist Before Moving to Chunk 1.3
+
+- [ ] `js/modes/AbstractMode.js` created with all methods
+- [ ] `tests/modes/AbstractMode.test.js` created with comprehensive tests
+- [ ] All new tests pass (`npm test -- tests/modes/AbstractMode.test.js`)
+- [ ] All existing tests still pass (`npm test`)
+- [ ] E2E tests still pass (`npm run e2e`)
+- [ ] Code follows existing project conventions
+
+---
+
+## Next Step
+
+Proceed to **Chunk 1.3: ModeManager (State Container)** – the FSM controller that holds current mode reference and handles transitions.
