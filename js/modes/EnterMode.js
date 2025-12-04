@@ -121,8 +121,8 @@ export class EnterMode extends NavigationMode {
 
       case INTENTS.INPUT:
         // Additional input is handled by the editor's native input
-        // We just return true to prevent default
-        return true;
+        // Return false to allow browser to handle character input
+        return false;
 
       default:
         // Delegate to NavigationMode parent for other intents

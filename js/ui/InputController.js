@@ -58,6 +58,10 @@ export class InputController {
     /** @private */
     this._attached = false;
 
+    // Get cell editor element to also listen for events when editing
+    /** @private */
+    this._cellEditor = document.getElementById('cell-editor');
+
     // Bind methods for event listener removal
     this._boundHandleKeyDown = this._handleKeyDown.bind(this);
     this._boundHandleMouseDown = this._handleMouseDown.bind(this);
@@ -76,6 +80,12 @@ export class InputController {
 
     this._container.addEventListener('keydown', this._boundHandleKeyDown);
     this._container.addEventListener('mousedown', this._boundHandleMouseDown);
+
+    // Also attach to cell editor to capture events when editing
+    if (this._cellEditor) {
+      this._cellEditor.addEventListener('keydown', this._boundHandleKeyDown);
+    }
+
     this._attached = true;
 
     Logger.log('InputController', 'Event listeners attached');
@@ -92,6 +102,12 @@ export class InputController {
 
     this._container.removeEventListener('keydown', this._boundHandleKeyDown);
     this._container.removeEventListener('mousedown', this._boundHandleMouseDown);
+
+    // Remove from cell editor too
+    if (this._cellEditor) {
+      this._cellEditor.removeEventListener('keydown', this._boundHandleKeyDown);
+    }
+
     this._attached = false;
 
     Logger.log('InputController', 'Event listeners detached');
