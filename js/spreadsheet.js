@@ -22,6 +22,9 @@ import { EditMode } from './modes/EditMode.js';
 import { EnterMode } from './modes/EnterMode.js';
 import { PointMode } from './modes/PointMode.js';
 
+// Status Bar
+import { StatusBar } from './status-bar.js';
+
 export class Spreadsheet {
   constructor(containerId, formulaWorker) {
     const container = document.getElementById(containerId);
@@ -62,6 +65,9 @@ export class Spreadsheet {
     this.formulaBar = null;
     this.formulaWorker = formulaWorker;
 
+    // Initialize Status Bar (before mode system so it can receive mode updates)
+    this.statusBar = new StatusBar(this);
+
     // Initialize Mode System
     const modeContext = {
       selectionManager: this.selectionManager,
@@ -73,8 +79,7 @@ export class Spreadsheet {
       clipboardManager: this.clipboardManager,
       executeCellUpdate: this._executeCellUpdate.bind(this),
       updateModeDisplay: (modeName) => {
-        Logger.log('ModeSystem', `Mode: ${modeName}`);
-        // TODO: Update UI to show mode (e.g., in formula bar)
+        this.statusBar.updateMode(modeName);
       }
     };
 

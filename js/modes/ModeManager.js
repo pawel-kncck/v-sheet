@@ -169,6 +169,11 @@ export class ModeManager {
     // Step 4: Enter new mode
     newMode.onEnter(payload);
 
+    // Step 5: Notify UI of mode change
+    if (this._context.updateModeDisplay) {
+      this._context.updateModeDisplay(modeName);
+    }
+
     Logger.log('ModeManager', `Now in mode: "${modeName}"`);
   }
 

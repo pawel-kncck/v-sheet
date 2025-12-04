@@ -597,3 +597,47 @@ body {
     border-dashoffset: 8;
   }
 }
+
+/* ==================== STATUS BAR STYLES ==================== */
+#status-bar-container {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  background-color: #f8faf8;
+  border-top: 1px solid #dadce0;
+  padding: 0 12px;
+  flex-shrink: 0;
+  gap: 12px;
+  font-size: 12px;
+  color: #444746;
+}
+
+.status-mode,
+.status-selection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-label {
+  font-weight: 500;
+  color: #5f6368;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+#status-mode-value {
+  font-weight: 500;
+  color: #202124;
+}
+
+#status-selection-value {
+  font-family: 'Roboto Mono', monospace;
+  color: #202124;
+}
+
+.status-separator {
+  width: 1px;
+  height: 16px;
+  background-color: #dadce0;
+}
