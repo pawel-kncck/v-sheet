@@ -9,8 +9,12 @@ export class SelectionManager {
    */
   constructor(gridRenderer, config = {}) {
     this.gridRenderer = gridRenderer;
-    this.ROWS = config.rows || 100;
-    this.COLS = config.cols || 26;
+    this.config = {
+      rows: config.rows || 100,
+      cols: config.cols || 26
+    };
+    this.ROWS = this.config.rows;
+    this.COLS = this.config.cols;
 
     // --- Selection State ---
     this.activeCell = null; // { row, col }
@@ -253,8 +257,9 @@ clear() {
    * Jumps to the edge of the data region.
    * @param {string} direction - 'up', 'down', 'left', 'right'
    * @param {Function} hasValue - Function(cellId) -> boolean. Returns true if cell has data.
+   * @param {boolean} shift - If true, extends selection instead of moving
    */
-  jumpToEdge(direction, hasValue) {
+  jumpToEdge(direction, hasValue, shift = false) {
     if (!this.activeCell) return;
 
     let { row, col } = this.activeCell;
@@ -322,14 +327,93 @@ clear() {
 
     // Perform the move
     const newCoords = { row: nextR, col: nextC };
-    this.setActiveCell(newCoords);
-    this.selectCell(newCoords, false, false);
-    
+
+    if (shift) {
+      // Extend selection
+      this.selectCell(newCoords, true, false);
+    } else {
+      // Move selection
+      this.setActiveCell(newCoords);
+      this.selectCell(newCoords, false, false);
+    }
+
     // Scroll into view
     const cellElement = this.gridRenderer.getCellElementByCoords(nextR, nextC);
     if (cellElement) {
       this.gridRenderer.scrollCellIntoView(cellElement);
     }
+  }
+
+  /**
+   * Extends current selection to the edge of the data region.
+   * @param {string} direction - 'up', 'down', 'left', 'right'
+   * @param {Function} hasValue - Function(cellId) -> boolean. Returns true if cell has data.
+   */
+  extendSelectionToEdge(direction, hasValue) {
+    this.jumpToEdge(direction, hasValue, true);
+  }
+
+  /**
+   * Extends the current selection in a direction.
+   * @param {string} direction - 'up', 'down', 'left', 'right'
+   */
+  extendSelection(direction) {
+    this.moveSelection(direction, true);
+  }
+
+  /**
+   * Selects a rectangular range.
+   * @param {Object} start - { row, col }
+   * @param {Object} end - { row, col }
+   */
+  selectRange(start, end) {
+    this.setActiveCell(start);
+    this.selectionAnchor = start;
+    this.ranges = [{ start, end }];
+    this.render();
+    this._notifySelectionChange();
+  }
+
+  /**
+   * Gets the current selection ranges.
+   * @returns {Array} Array of { start: coords, end: coords }
+   */
+  getSelection() {
+    return this.ranges;
+  }
+
+  /**
+   * Gets the bounds of the current selection.
+   * @returns {{ minRow: number, maxRow: number, minCol: number, maxCol: number }|null}
+   */
+  getSelectionBounds() {
+    if (this.ranges.length === 0) {
+      return null;
+    }
+
+    let minRow = Infinity;
+    let maxRow = -Infinity;
+    let minCol = Infinity;
+    let maxCol = -Infinity;
+
+    this.ranges.forEach(range => {
+      const { start, end } = range;
+      minRow = Math.min(minRow, start.row, end.row);
+      maxRow = Math.max(maxRow, start.row, end.row);
+      minCol = Math.min(minCol, start.col, end.col);
+      maxCol = Math.max(maxCol, start.col, end.col);
+    });
+
+    return { minRow, maxRow, minCol, maxCol };
+  }
+
+  /**
+   * Converts coordinates to cell ID (public version).
+   * @param {Object} coords - { row, col }
+   * @returns {string} Cell ID like "A1"
+   */
+  coordsToCellId(coords) {
+    return this._coordsToCellId(coords);
   }
 
   /**

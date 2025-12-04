@@ -13,6 +13,14 @@ import { SelectionManager } from './ui/SelectionManager.js';
 import { GridResizer } from './ui/GridResizer.js';
 import { EditorManager } from './ui/EditorManager.js';
 import { ClipboardManager } from './ui/ClipboardManager.js';
+import { InputController } from './ui/InputController.js';
+
+// Mode System
+import { ModeManager } from './modes/ModeManager.js';
+import { ReadyMode } from './modes/ReadyMode.js';
+import { EditMode } from './modes/EditMode.js';
+import { EnterMode } from './modes/EnterMode.js';
+import { PointMode } from './modes/PointMode.js';
 
 export class Spreadsheet {
   constructor(containerId, formulaWorker) {
@@ -54,17 +62,57 @@ export class Spreadsheet {
     this.formulaBar = null;
     this.formulaWorker = formulaWorker;
 
+    // Initialize Mode System
+    const modeContext = {
+      selectionManager: this.selectionManager,
+      editorManager: this.editor,
+      historyManager: this.historyManager,
+      fileManager: null, // Will be set later via setFileManager
+      formulaWorker: this.formulaWorker,
+      renderer: this.renderer,
+      clipboardManager: this.clipboardManager,
+      executeCellUpdate: this._executeCellUpdate.bind(this),
+      updateModeDisplay: (modeName) => {
+        Logger.log('ModeSystem', `Mode: ${modeName}`);
+        // TODO: Update UI to show mode (e.g., in formula bar)
+      }
+    };
+
+    this.modeManager = new ModeManager(modeContext);
+
+    // Register modes
+    this.modeManager.registerMode('ready', ReadyMode);
+    this.modeManager.registerMode('edit', EditMode);
+    this.modeManager.registerMode('enter', EnterMode);
+    this.modeManager.registerMode('point', PointMode);
+
+    // Create grid first (so cellGridContainer exists)
     this.renderer.createGrid();
+
+    // Initialize InputController after grid is created
+    this.inputController = new InputController(
+      this.renderer.cellGridContainer,
+      this.modeManager
+    );
+
     this._setupEventWiring();
     this._setupWorkerListeners();
-    this.selectionManager.selectCell({ row: 1, col: 0 }); 
+    this.selectionManager.selectCell({ row: 1, col: 0 });
 
-    Logger.log('Spreadsheet', 'Coordinator initialized');
+    // Start in ready mode
+    this.modeManager.switchMode('ready');
+
+    Logger.log('Spreadsheet', 'Coordinator initialized with Mode System');
   }
 
   // ... [setFileManager, setFormulaBar methods same as before] ...
   setFileManager(fileManager) {
     this.fileManager = fileManager;
+
+    // Update mode context with fileManager
+    if (this.modeManager && this.modeManager._context) {
+      this.modeManager._context.fileManager = fileManager;
+    }
   }
 
   setFormulaBar(formulaBar) {
@@ -234,16 +282,16 @@ export class Spreadsheet {
       this._updateMetadata();
     });
     this.selectionManager.on('selectionChange', () => this._updateMetadata());
-    
-    this.editor.on('commit', ({ cellId, value, moveDirection }) => {
-      this._executeCellUpdate(cellId, value);
-      if (moveDirection === 'down') this.selectionManager.moveSelection('down');
-      else if (moveDirection === 'right') this.selectionManager.moveSelection('right');
-      this.renderer.cellGridContainer.focus();
-    });
+
+    // Editor callbacks removed - modes now handle commit/cancel
 
     this.renderer.cellGridContainer.tabIndex = 0;
-    this.renderer.cellGridContainer.addEventListener('keydown', (e) => this._handleGlobalKeydown(e));
+
+    // Attach InputController for keyboard events
+    this.inputController.attach();
+
+    // Keep old keyboard handler for backwards compatibility during migration
+    // this.renderer.cellGridContainer.addEventListener('keydown', (e) => this._handleGlobalKeydown(e));
   }
 
   _setupWorkerListeners() {

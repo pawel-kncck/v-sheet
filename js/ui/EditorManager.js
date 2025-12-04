@@ -1,13 +1,26 @@
 import { Logger } from '../engine/utils/Logger.js';
 
+/**
+ * EditorManager - "Dumb" DOM controller for the cell editor.
+ *
+ * Responsibilities:
+ * - Position and show/hide the editor
+ * - Sync styles with the cell being edited
+ * - Provide getValue/setValue for modes to query/set editor content
+ *
+ * Does NOT handle:
+ * - Keyboard events (handled by InputController)
+ * - Business logic (handled by modes)
+ * - State transitions (handled by ModeManager)
+ */
 export class EditorManager {
   /**
-   * @param {GridRenderer} gridRenderer 
+   * @param {GridRenderer} gridRenderer
    */
   constructor(gridRenderer) {
     this.renderer = gridRenderer;
     this.cellEditor = document.getElementById('cell-editor');
-    
+
     if (!this.cellEditor) {
       Logger.error('EditorManager', 'Cell editor input (#cell-editor) not found');
     }
@@ -15,16 +28,8 @@ export class EditorManager {
     // State
     this.isEditing = false;
     this.editingCellId = null; // "A1"
-    this.isIntentionalEdit = false; // True if user typed a char, False if just double-clicked/Enter
 
-    // Callbacks
-    this.callbacks = {
-      onCommit: null, // Fired when user saves (Enter, Tab, click away)
-      onCancel: null  // Fired on Escape
-    };
-
-    this._bindEvents();
-    Logger.log('EditorManager', 'Initialized');
+    Logger.log('EditorManager', 'Initialized (Mode-based)');
   }
 
   /**
@@ -39,12 +44,11 @@ export class EditorManager {
 
     this.isEditing = true;
     this.editingCellId = cellId;
-    this.isIntentionalEdit = !!triggerKey;
 
     // 1. Position the editor over the cell
     const gridContainer = this.renderer.cellGridContainer;
     const cellRect = cellElement.getBoundingClientRect();
-    
+
     // Calculate offsets based on scroll position
     const scrollLeft = gridContainer.scrollLeft;
     const scrollTop = gridContainer.scrollTop;
@@ -55,7 +59,7 @@ export class EditorManager {
     this.cellEditor.style.height = `${cellRect.height}px`;
     this.cellEditor.style.display = 'block';
 
-    // --- NEW: Sync Styles ---
+    // Sync styles from cell
     const computedStyle = window.getComputedStyle(cellElement);
     this.cellEditor.style.fontFamily = computedStyle.fontFamily;
     this.cellEditor.style.fontSize = computedStyle.fontSize;
@@ -64,62 +68,28 @@ export class EditorManager {
     this.cellEditor.style.color = computedStyle.color;
     this.cellEditor.style.textAlign = computedStyle.textAlign;
     this.cellEditor.style.backgroundColor = computedStyle.backgroundColor;
-    // ------------------------
 
     // 2. Set Value
     this.cellEditor.value = triggerKey ? triggerKey : initialValue;
 
     // 3. Visuals
     cellElement.classList.add('editing');
-    this.cellEditor.focus();
-    
+
     // If not a trigger key start (e.g. double click), select all text
     if (!triggerKey) {
       setTimeout(() => {
         this.cellEditor.select();
       }, 0);
     }
+
+    Logger.log('EditorManager', `Started edit for ${cellId}`);
   }
 
   /**
-   * Commits the current value and closes the editor.
-   * @param {string} moveDirection - Optional direction to move after commit ('down', 'right', 'none')
+   * Hides the editor without committing.
+   * Modes are responsible for committing values.
    */
-  commitEdit(moveDirection = 'down') {
-    if (!this.isEditing) return;
-
-    const newValue = this.cellEditor.value;
-    const cellId = this.editingCellId;
-
-    this._closeEditor();
-
-    if (this.callbacks.onCommit) {
-      this.callbacks.onCommit({ 
-        cellId, 
-        value: newValue,
-        moveDirection
-      });
-    }
-  }
-
-  /**
-   * Cancels editing without saving changes.
-   */
-  cancelEdit() {
-    if (!this.isEditing) return;
-    
-    this._closeEditor();
-    
-    if (this.callbacks.onCancel) {
-      this.callbacks.onCancel();
-    }
-  }
-
-  /**
-   * Internal cleanup to hide the editor.
-   * @private
-   */
-  _closeEditor() {
+  hide() {
     if (this.editingCellId) {
       const cell = this.renderer.getCellElement(this.editingCellId);
       if (cell) cell.classList.remove('editing');
@@ -129,7 +99,7 @@ export class EditorManager {
     this.editingCellId = null;
     this.cellEditor.style.display = 'none';
     this.cellEditor.value = '';
-    
+
     // Reset styles to avoid leaking to next edit
     this.cellEditor.style.fontFamily = '';
     this.cellEditor.style.fontSize = '';
@@ -140,35 +110,42 @@ export class EditorManager {
     this.cellEditor.style.backgroundColor = '';
 
     this.renderer.cellGridContainer.focus();
+
+    Logger.log('EditorManager', 'Editor hidden');
   }
 
-  _bindEvents() {
-    this.cellEditor.addEventListener('keydown', (e) => {
-      const key = e.key;
-
-      if (key === 'Enter') {
-        e.preventDefault();
-        this.commitEdit('down');
-      } else if (key === 'Tab') {
-        e.preventDefault();
-        this.commitEdit('right');
-      } else if (key === 'Escape') {
-        e.preventDefault();
-        this.cancelEdit();
-      }
-    });
-
-    this.cellEditor.addEventListener('blur', () => {
-      if (this.isEditing) {
-        this.commitEdit('none');
-      }
-    });
-  }
-
-  on(eventName, callback) {
-    const callbackKey = `on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`;
-    if (callbackKey in this.callbacks) {
-      this.callbacks[callbackKey] = callback;
+  /**
+   * Focuses the editor input.
+   */
+  focus() {
+    if (this.cellEditor) {
+      this.cellEditor.focus();
     }
+  }
+
+  /**
+   * Gets the current value in the editor.
+   * @returns {string}
+   */
+  getValue() {
+    return this.cellEditor ? this.cellEditor.value : '';
+  }
+
+  /**
+   * Sets the value in the editor.
+   * @param {string} value
+   */
+  setValue(value) {
+    if (this.cellEditor) {
+      this.cellEditor.value = value;
+    }
+  }
+
+  /**
+   * Checks if the editor is currently visible.
+   * @returns {boolean}
+   */
+  isVisible() {
+    return this.isEditing;
   }
 }
