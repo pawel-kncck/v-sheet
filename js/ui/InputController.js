@@ -27,7 +27,8 @@ import {
   createInputContext,
   createCommitContext,
   createDeleteContext,
-  createEditStartContext
+  createEditStartContext,
+  createCellSelectContext
 } from '../modes/Intents.js';
 import { Logger } from '../engine/utils/Logger.js';
 
@@ -151,8 +152,41 @@ export class InputController {
    * @param {MouseEvent} event - The mouse event
    */
   _handleMouseDown(event) {
-    // This will be implemented in Phase 4, Chunk 4.4
-    // For now, leave mouse events to be handled by existing system
+    // Find the cell element that was clicked
+    const cellElement = event.target.closest('.cell');
+
+    if (!cellElement) {
+      // Not a cell click, allow default handling
+      return;
+    }
+
+    // Extract cell coordinates from data attributes
+    const row = parseInt(cellElement.dataset.row, 10);
+    const col = parseInt(cellElement.dataset.col, 10);
+
+    if (isNaN(row) || isNaN(col)) {
+      Logger.warn('InputController', 'Invalid cell coordinates', { row, col });
+      return;
+    }
+
+    const coords = { row, col };
+    const modifiers = this._normalizeModifiers(event);
+
+    // Create CELL_SELECT intent
+    const intentData = {
+      intent: INTENTS.CELL_SELECT,
+      context: createCellSelectContext(coords, modifiers.shift, modifiers.ctrl)
+    };
+
+    Logger.log('InputController', `Cell click (${row},${col}) → CELL_SELECT`, coords);
+
+    // Delegate to ModeManager
+    const handled = this._modeManager.handleIntent(intentData.intent, intentData.context);
+
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }
 
   /**

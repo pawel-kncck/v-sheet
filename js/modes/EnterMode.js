@@ -150,7 +150,12 @@ export class EnterMode extends NavigationMode {
     this._commitEntry();
 
     // Now delegate to parent's navigation
-    return super._handleNavigate(context);
+    super._handleNavigate(context);
+
+    // Switch back to ready mode
+    this._requestModeSwitch('ready');
+
+    return true;
   }
 
   /**
@@ -165,7 +170,12 @@ export class EnterMode extends NavigationMode {
     this._commitEntry();
 
     // Now delegate to parent's jump
-    return super._handleJumpToEdge(context);
+    super._handleJumpToEdge(context);
+
+    // Switch back to ready mode
+    this._requestModeSwitch('ready');
+
+    return true;
   }
 
   /**

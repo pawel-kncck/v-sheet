@@ -38,7 +38,7 @@ export class EditorManager {
    * @param {string} initialValue - The value to populate (formula or raw text)
    * @param {string} [triggerKey] - If user pressed a key to start (e.g., "a"), start with that.
    */
-  startEdit(cellId, initialValue = '', triggerKey = null) {
+  startEdit(cellId, initialValue = '', triggerKey = null, selectAll = false) {
     const cellElement = this.renderer.getCellElement(cellId);
     if (!cellElement) return;
 
@@ -75,12 +75,20 @@ export class EditorManager {
     // 3. Visuals
     cellElement.classList.add('editing');
 
-    // If not a trigger key start (e.g. double click), select all text
-    if (!triggerKey) {
+    // Handle cursor position based on edit mode
+    if (selectAll) {
+      // Select all text (e.g., for F2 key)
       setTimeout(() => {
         this.cellEditor.select();
       }, 0);
+    } else if (!triggerKey) {
+      // Position cursor at end (e.g., for double-click)
+      setTimeout(() => {
+        const len = this.cellEditor.value.length;
+        this.cellEditor.setSelectionRange(len, len);
+      }, 0);
     }
+    // If triggerKey is provided, cursor is already at the right position (after the trigger char)
 
     Logger.log('EditorManager', `Started edit for ${cellId}`);
   }

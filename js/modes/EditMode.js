@@ -113,6 +113,10 @@ export class EditMode extends AbstractMode {
       case INTENTS.CANCEL:
         return this._handleCancel();
 
+      case INTENTS.CELL_SELECT:
+        // User clicked another cell while editing - commit and select
+        return this._handleCellSelectWhileEditing(context);
+
       case INTENTS.NAVIGATE:
         // Important: EditMode does NOT handle navigation
         // This allows arrow keys to move the text cursor
@@ -197,6 +201,41 @@ export class EditMode extends AbstractMode {
 
     // Return to ready mode
     this._requestModeSwitch('ready');
+
+    return true;
+  }
+
+  /**
+   * Handles CELL_SELECT intent while editing.
+   *
+   * Commits current edit and selects the new cell.
+   *
+   * @private
+   * @param {{ coords: Object, shift: boolean, ctrl: boolean }} context
+   * @returns {boolean}
+   */
+  _handleCellSelectWhileEditing(context) {
+    if (!this._editorManager || !this._editingCellId) {
+      return false;
+    }
+
+    // Commit the current edit
+    const newValue = this._editorManager.getValue();
+    if (this._context.executeCellUpdate) {
+      this._context.executeCellUpdate(this._editingCellId, newValue);
+    }
+
+    // Hide editor
+    this._editorManager.hide();
+
+    // Switch to ready mode
+    this._requestModeSwitch('ready');
+
+    // Now select the new cell
+    const { coords, shift, ctrl } = context;
+    this._selectionManager.selectCell(coords, shift, ctrl);
+
+    Logger.log(this.getName(), `Committed and selected new cell`);
 
     return true;
   }

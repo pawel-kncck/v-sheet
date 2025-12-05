@@ -5,6 +5,8 @@
  * - Formula input field
  * - Synchronization with spreadsheet
  */
+import { INTENTS, createEditStartContext } from './modes/Intents.js';
+
 class FormulaBar {
   constructor(fileManager, spreadsheet) {
     this.fileManager = fileManager;
@@ -88,6 +90,10 @@ class FormulaBar {
     // Formula input
     this.elements.formulaInput.addEventListener('focus', () => {
       this.isEditingFormula = true;
+      // Trigger Edit mode when formula bar is focused
+      if (this.spreadsheet && this.spreadsheet.modeManager) {
+        this.spreadsheet.modeManager.handleIntent(INTENTS.EDIT_START, createEditStartContext('formulaBar'));
+      }
     });
 
     this.elements.formulaInput.addEventListener('blur', () => {

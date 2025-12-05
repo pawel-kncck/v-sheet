@@ -125,8 +125,13 @@ class FileManager {
       this.currentFile = fileData;
       this.hasUnsavedChanges = false;
 
-      // --- NEW: Initialize StyleManager ---
-      // Use existing styles or create empty object if migrating old file
+      // Initialize data structures if they don't exist
+      if (!this.currentFile.data) {
+        this.currentFile.data = {};
+      }
+      if (!this.currentFile.data.cells) {
+        this.currentFile.data.cells = {};
+      }
       if (!this.currentFile.data.styles) {
         this.currentFile.data.styles = {};
       }
@@ -176,7 +181,13 @@ class FileManager {
       this.currentFile = fileData;
       this.hasUnsavedChanges = false;
 
-      // --- NEW: Initialize StyleManager ---
+      // Initialize data structures if they don't exist
+      if (!this.currentFile.data) {
+        this.currentFile.data = {};
+      }
+      if (!this.currentFile.data.cells) {
+        this.currentFile.data.cells = {};
+      }
       if (!this.currentFile.data.styles) {
         this.currentFile.data.styles = {};
       }

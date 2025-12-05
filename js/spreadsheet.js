@@ -21,6 +21,7 @@ import { ReadyMode } from './modes/ReadyMode.js';
 import { EditMode } from './modes/EditMode.js';
 import { EnterMode } from './modes/EnterMode.js';
 import { PointMode } from './modes/PointMode.js';
+import { INTENTS, createEditStartContext } from './modes/Intents.js';
 
 // Status Bar
 import { StatusBar } from './status-bar.js';
@@ -78,6 +79,7 @@ export class Spreadsheet {
       renderer: this.renderer,
       clipboardManager: this.clipboardManager,
       executeCellUpdate: this._executeCellUpdate.bind(this),
+      applyRangeFormat: this.applyRangeFormat.bind(this),
       updateModeDisplay: (modeName) => {
         this.statusBar.updateMode(modeName);
       }
@@ -172,7 +174,13 @@ export class Spreadsheet {
       const coords = this._cellIdToCoords(fileData.metadata.lastActiveCell);
       if (coords) {
         this.selectionManager.selectCell(coords);
+      } else {
+        // Invalid coords, default to A1
+        this.selectionManager.selectCell({ row: 1, col: 0 });
       }
+    } else {
+      // No last active cell, default to A1
+      this.selectionManager.selectCell({ row: 1, col: 0 });
     }
   }
 
@@ -231,7 +239,7 @@ export class Spreadsheet {
     this.renderer.on('cellDoubleClick', ({ cellElement }) => {
       // Don't manually startEdit. Let the Mode system handle the transition.
       // This ensures we enter 'edit' mode properly so arrow keys don't navigate the grid.
-      this.modeManager.handleIntent('EDIT_START', { source: 'mouse' });
+      this.modeManager.handleIntent(INTENTS.EDIT_START, createEditStartContext('mouse'));
     });
 
     this.renderer.on('headerClick', ({ type, index, event }) => {
@@ -286,8 +294,26 @@ export class Spreadsheet {
     this.selectionManager.on('activeCellChange', (cellId) => {
       this._updateFormulaBar();
       this._updateMetadata();
+      // Also update status bar
+      if (this.statusBar) {
+        const data = {
+          ranges: this.selectionManager.ranges,
+          activeCell: this.selectionManager.activeCell
+        };
+        this.statusBar.updateSelection(data);
+      }
     });
-    this.selectionManager.on('selectionChange', () => this._updateMetadata());
+    this.selectionManager.on('selectionChange', () => {
+      this._updateMetadata();
+      // Also update status bar
+      if (this.statusBar) {
+        const data = {
+          ranges: this.selectionManager.ranges,
+          activeCell: this.selectionManager.activeCell
+        };
+        this.statusBar.updateSelection(data);
+      }
+    });
 
     // Editor callbacks removed - modes now handle commit/cancel
 

@@ -83,17 +83,16 @@ export class ReadyMode extends NavigationMode {
         return this._handleHeaderSelect(context);
 
       case INTENTS.COMMIT:
-        // In ready mode, Enter on a non-formula cell means "start editing"
-        // Check if current cell has a formula
+        // In ready mode, Enter on a cell with content means "start editing"
         const activeCellId = this._getActiveCellId();
         if (activeCellId) {
           const value = this._getCellValue(activeCellId);
-          if (value && value.startsWith('=')) {
-            // It's a formula, start formula editing
+          if (value) {
+            // Cell has content, start editing
             return this._handleEditStart({ source: 'keyboard' });
           }
         }
-        // Not a formula, move down (default Enter behavior in ready mode)
+        // Empty cell, move down (default Enter behavior in ready mode)
         return this._handleNavigate({ direction: 'down', shift: false });
 
       default:

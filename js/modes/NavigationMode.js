@@ -84,6 +84,12 @@ export class NavigationMode extends AbstractMode {
       case INTENTS.SELECT_ALL:
         return this._handleSelectAll();
 
+      case INTENTS.FORMAT_BOLD:
+        return this._handleFormatBold();
+
+      case INTENTS.FORMAT_ITALIC:
+        return this._handleFormatItalic();
+
       default:
         // Delegate to parent
         return super.handleIntent(intent, context);
@@ -283,5 +289,41 @@ export class NavigationMode extends AbstractMode {
 
     Logger.log(this.getName(), 'Select all');
     return true;
+  }
+
+  /**
+   * Handles FORMAT_BOLD intent (Ctrl+B).
+   *
+   * @protected
+   * @returns {boolean}
+   */
+  _handleFormatBold() {
+    // Delegate to applyRangeFormat if available in context
+    if (this._context.applyRangeFormat) {
+      this._context.applyRangeFormat({ font: { bold: true } }, 'toggle');
+      Logger.log(this.getName(), 'Toggle bold');
+      return true;
+    }
+
+    Logger.warn(this.getName(), 'applyRangeFormat not available');
+    return false;
+  }
+
+  /**
+   * Handles FORMAT_ITALIC intent (Ctrl+I).
+   *
+   * @protected
+   * @returns {boolean}
+   */
+  _handleFormatItalic() {
+    // Delegate to applyRangeFormat if available in context
+    if (this._context.applyRangeFormat) {
+      this._context.applyRangeFormat({ font: { italic: true } }, 'toggle');
+      Logger.log(this.getName(), 'Toggle italic');
+      return true;
+    }
+
+    Logger.warn(this.getName(), 'applyRangeFormat not available');
+    return false;
   }
 }
