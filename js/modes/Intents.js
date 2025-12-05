@@ -171,8 +171,8 @@ export function createDeleteContext(key) {
  * Creates a context object for EDIT_START intents.
  */
 export function createEditStartContext(source = 'keyboard') {
-  if (source !== 'keyboard' && source !== 'mouse') {
-    throw new Error(`Invalid source: ${source}. Must be 'keyboard' or 'mouse'`);
+  if (source !== 'keyboard' && source !== 'mouse' && source !== 'formulaBar') {
+    throw new Error(`Invalid source: ${source}. Must be 'keyboard', 'mouse', or 'formulaBar'`);
   }
   return Object.freeze({ source });
 }

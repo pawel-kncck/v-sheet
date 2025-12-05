@@ -1,200 +1,117 @@
-# Implementation Plan: Fix 17 Failing E2E Tests
+# Bug Fix Plan for v-sheet
 
-## Summary of Issues
-
-After analyzing the failing tests, I've identified **8 distinct root causes** affecting 17 tests across 6 categories.
-
----
-
-## Issue Categories and Root Causes
-
-### Category 1: Status Bar Not Updating (2 tests)
-**Tests:**
-- `status bar should update active cell when navigating with arrow keys`
-- `status bar should update when clicking on different cells`
-
-**Root Cause:** Status bar callbacks are registered with SelectionManager, but when mouse clicks bypass the mode system (going directly to `selectionManager.selectCell()`), the status bar should still update. The issue is likely that StatusBar's `setupCallbacks()` in `js/status-bar.js` is not being triggered properly during initialization.
-
-**Files:** `js/status-bar.js`, `js/spreadsheet.js`
+## Summary
+Fix 5 bugs from `docs/ux_architecture/bud_report.md` affecting file menu, clipboard, formula bar sync, drag ghost, and mode transitions.
 
 ---
 
-### Category 2: Enter Mode Not Exiting After Arrow Keys (2 tests)
-**Tests:**
-- `arrow key should commit edit and switch to Ready mode`
-- `arrow right should commit edit and allow typing in next cell`
+## Bug 1: File Menu Doesn't Disappear After Creating New File
 
-**Root Cause:** In `EnterMode.js:148-154`, `_handleNavigateWithCommit()` commits the entry and navigates but **never switches to Ready mode**. It should call `this._requestModeSwitch('ready')` after navigation.
+**Problem:** `handleNewFile()` doesn't guarantee dropdown closure or grid focus.
 
-**Files:** `js/modes/EnterMode.js:148-154`
+**Files to modify:**
+- `js/formula-bar.js` (lines 335-367)
 
-**Fix:**
-```javascript
-_handleNavigateWithCommit(context) {
-  this._commitEntry();
-  super._handleNavigate(context);
-  this._requestModeSwitch('ready');  // ADD THIS LINE
-  return true;
-}
-```
+**Changes:**
+1. Wrap `handleNewFile()` in try-finally block
+2. Move `closeFileDropdown()` to finally block
+3. Add `this.spreadsheet.renderer.cellGridContainer.focus()` after closing
 
 ---
 
-### Category 3: Point Mode Mouse Click Not Inserting References (3 tests)
-**Tests:**
-- `clicking a cell in Point mode should insert reference`
-- `clicking multiple cells should replace reference`
-- `click after operator should add new reference`
+## Bug 2: Copy/Paste Doesn't Work with Ctrl+C/Ctrl+V
 
-**Root Cause:** `InputController._handleMouseDown()` at `js/ui/InputController.js:153-156` is a **stub** that does nothing. Mouse clicks bypass the mode system entirely and go directly to `selectionManager.selectCell()` via `Spreadsheet._setupEventWiring()`. Point mode's `CELL_SELECT` handler is never called for mouse events.
+**Problem:** `ClipboardManager.paste()` doesn't exist; `copy()` called without ranges.
 
-**Files:** `js/ui/InputController.js:153-156`, `js/spreadsheet.js:192-217`
+**Files to modify:**
+- `js/ui/ClipboardManager.js`
+- `js/modes/NavigationMode.js`
+- `js/spreadsheet.js`
 
-**Fix:** Implement `_handleMouseDown()` to:
-1. Extract cell coordinates from click target
-2. Create a `CELL_SELECT` intent with coordinates and modifiers
-3. Delegate to ModeManager
+**Changes:**
 
----
+1. **ClipboardManager.js:**
+   - Add `selectionManager` parameter to constructor
+   - Modify `copy(ranges)` to get ranges from `selectionManager` when not provided
+   - Add `paste()` method that calls `getPasteUpdates(activeCell)`
+   - Add `cut()` method that calls `copy()` then sets `clipboard.isCut = true`
 
-### Category 4: Double-Click / Edit Mode Issues (2 tests)
-**Tests:**
-- `double-click should enter Edit mode and allow editing`
-- `arrow keys in Edit mode should move cursor, not cell selection`
+2. **spreadsheet.js:**
+   - Pass `selectionManager` to ClipboardManager constructor
+   - Add `executePaste` method to mode context that executes `UpdateCellsCommand`
 
-**Root Cause:** The double-click handler at `js/spreadsheet.js:231-234` passes a string literal `'EDIT_START'` instead of importing the constant from `Intents.js`. This may cause issues with intent matching. Additionally, the test shows editor value is ` World` instead of `Hello World`, suggesting the existing value is being overwritten.
-
-**Files:** `js/spreadsheet.js:231-235`, `js/modes/EditMode.js`
-
-**Fix:**
-1. Import `INTENTS` in Spreadsheet.js and use `INTENTS.EDIT_START`
-2. Verify EditMode's `onEnter()` preserves existing cell content
+3. **NavigationMode.js:**
+   - Update `_handlePaste()` to call `context.executePaste(updates)`
 
 ---
 
-### Category 5: Ctrl+B Formatting Not Working (2 tests)
-**Tests:**
-- `should toggle bold via Keyboard Shortcut (Ctrl+B)`
-- `should persist formatting after reload`
+## Bug 3: Formula Bar Synchronization Issues
 
-**Root Cause:** `InputController._mapKeyToIntent()` correctly maps Ctrl+B to `INTENTS.FORMAT_BOLD` at line 300-306, but **no mode handles this intent**. `NavigationMode.handleIntent()` has no case for `FORMAT_BOLD`, so it falls through to `AbstractMode` which returns false (unhandled).
+**Problem:** Formula bar and cell editor don't sync during editing.
 
-The old handler at `Spreadsheet._handleGlobalKeydown()` (line 426-435) was working but is now commented out (line 300).
+**Files to modify:**
+- `js/ui/EditorManager.js`
+- `js/formula-bar.js`
+- `js/modes/EditMode.js`
+- `js/modes/PointMode.js`
+- `js/modes/Intents.js`
+- `js/spreadsheet.js`
 
-**Files:** `js/modes/NavigationMode.js:58-90`
+**Sub-fixes:**
 
-**Fix:** Add `FORMAT_BOLD` and `FORMAT_ITALIC` cases to `NavigationMode.handleIntent()`:
-```javascript
-case INTENTS.FORMAT_BOLD:
-  return this._handleFormatBold();
+### 3a. Cell typing doesn't update formula bar
+- **EditorManager.js:** Add `onValueChange` callback, fire on `input` event
+- **spreadsheet.js:** Wire callback to update formula bar
 
-case INTENTS.FORMAT_ITALIC:
-  return this._handleFormatItalic();
-```
+### 3b. Formula bar typing doesn't update cell
+- **formula-bar.js:** Implement `handleFormulaInput()` to call `editor.setValue(value)`
 
-Then implement these methods to call `spreadsheet.applyRangeFormat()`.
+### 3c. Point mode shows nothing when typing letters
+- **PointMode.js:** In `_handleInput()`, pass the already-updated value to EditMode's `initialValue`
 
----
+### 3d. Formula bar click should switch to Edit mode properly
+- **Intents.js:** Add 'formulaBar' as valid source in `createEditStartContext()`
 
-### Category 6: Enter Key Not Entering Edit Mode (1 test)
-**Tests:**
-- `pressing Enter on a cell with content should enter Edit mode`
-
-**Root Cause:** In `ReadyMode.js:85-98`, the `COMMIT` intent handler only enters Edit mode if the cell contains a formula (starts with `=`). For non-formula content, it just navigates down.
-
-**Files:** `js/modes/ReadyMode.js:85-98`
-
-**Fix:** Change the logic to enter Edit mode for ANY cell with content:
-```javascript
-case INTENTS.COMMIT:
-  const activeCellId = this._getActiveCellId();
-  if (activeCellId) {
-    const value = this._getCellValue(activeCellId);
-    if (value) {  // Any content, not just formulas
-      return this._handleEditStart({ source: 'keyboard' });
-    }
-  }
-  return this._handleNavigate({ direction: 'down', shift: false });
-```
+### 3e. No Point mode switch from Edit mode after typing operator
+- **EditMode.js:** Add `INTENTS.INPUT` case in `handleIntent()`
+- Check if editing formula and character is operator (+, -, *, /, etc.)
+- If so, append operator and switch to PointMode
 
 ---
 
-### Category 7: Formula Bar Click Not Entering Edit Mode (1 test)
-**Tests:**
-- `clicking formula bar should enter Edit mode for active cell`
+## Bug 4: Drag Ghost Not Visible
 
-**Root Cause:** There's no event handler that captures clicks on the formula bar (`#formula-input`) to trigger mode transitions. The formula bar needs to generate an `EDIT_START` intent.
+**Problem:** `showDragGhost()` is empty placeholder.
 
-**Files:** `js/spreadsheet.js`, `js/formula-bar.js`
+**Files to modify:**
+- `js/ui/GridRenderer.js` (lines 232-238)
 
-**Fix:** Add click handler on formula input that calls `modeManager.handleIntent(INTENTS.EDIT_START, { source: 'formulaBar' })`.
-
----
-
-### Category 8: Jump to Edge Not Working After File Load (2 tests)
-**Tests:**
-- `Ctrl+Arrow should detect data edges immediately after load`
-- `Ctrl+Right should work with horizontal data immediately after load`
-
-**Root Cause:** In `NavigationMode.js:124-127`, `_handleJumpToEdge()` uses:
-```javascript
-const hasValueFn = (cellId) => {
-  const value = this._fileManager?.getRawCellValue(cellId);
-  return value !== null && value !== undefined && value !== '';
-};
-```
-
-If `this._fileManager` is null or not yet initialized when Ctrl+Arrow is pressed, the optional chaining returns `undefined`, and `hasValueFn` returns `false` for every cell, causing no movement.
-
-**Files:** `js/modes/NavigationMode.js:120-139`, `js/modes/AbstractMode.js:84-86`
-
-**Fix:** Ensure `fileManager` is set in the mode context before keyboard events can be processed. Verify `spreadsheet.setFileManager()` is called and updates `modeContext.fileManager` properly.
-
----
-
-### Category 9: Formula Calculation Showing Cell Reference Instead of Value (1 test)
-**Tests:**
-- `should correctly calculate and recalculate a formula`
-
-**Root Cause:** The test shows `=A1+B1` displays "B1" instead of "15". This suggests the formula engine is returning the raw reference string instead of evaluating it. The issue is likely in how `getCellValue()` is called in the Evaluator, or cell data not being available when the formula is parsed.
-
-**Files:** `js/engine/FormulaEngine.js:230-233`, `js/engine/Evaluator.js:60-61`
-
-**Fix:** Debug the formula worker to trace why cell references aren't being resolved. Check if `cellData` is populated before formula evaluation.
+**Changes:**
+1. Create `#drag-ghost` element dynamically if not exists
+2. Calculate position from range cells using `getBoundingClientRect()`
+3. Set `left`, `top`, `width`, `height` and `display: block`
 
 ---
 
 ## Implementation Order
 
-1. **EnterMode arrow key exit** (Category 2) - Simple one-line fix
-2. **Ctrl+B formatting** (Category 5) - Add intent handlers to NavigationMode
-3. **Enter key Edit mode** (Category 6) - Simple condition change
-4. **InputController mouse events** (Category 3) - Implement stub
-5. **Status bar updates** (Category 1) - Verify callback wiring
-6. **Double-click Edit mode** (Category 4) - Fix intent constant usage
-7. **Formula bar click** (Category 7) - Add event handler
-8. **Jump to edge** (Category 8) - Debug fileManager initialization
-9. **Formula calculation** (Category 9) - Debug formula worker
+1. **Bug 4** - Isolated, no dependencies
+2. **Bug 1** - Isolated, straightforward
+3. **Bug 2** - Multiple files but clear pattern
+4. **Bug 3** - Most complex, interdependent sub-fixes
 
 ---
 
-## Files to Modify
+## Critical Files Summary
 
-| File | Changes |
-|------|---------|
-| `js/modes/EnterMode.js` | Add `_requestModeSwitch('ready')` after navigate |
-| `js/modes/NavigationMode.js` | Add FORMAT_BOLD and FORMAT_ITALIC handlers |
-| `js/modes/ReadyMode.js` | Change COMMIT to enter Edit mode for any content |
-| `js/ui/InputController.js` | Implement `_handleMouseDown()` |
-| `js/spreadsheet.js` | Import INTENTS, fix double-click handler, add formula bar click handler |
-| `js/status-bar.js` | Verify callback registration |
-| `js/formula-bar.js` | Add click handler for Edit mode transition |
-
----
-
-## Estimated Impact
-
-- **17 tests should pass** after implementing all fixes
-- Changes are localized to the mode system and event handling
-- No architectural changes required
-- All fixes align with the existing FSM pattern documented in CLAUDE.md
+| File | Bugs |
+|------|------|
+| `js/formula-bar.js` | 1, 3b |
+| `js/ui/ClipboardManager.js` | 2 |
+| `js/modes/NavigationMode.js` | 2 |
+| `js/spreadsheet.js` | 2, 3a |
+| `js/ui/EditorManager.js` | 3a |
+| `js/modes/EditMode.js` | 3e |
+| `js/modes/PointMode.js` | 3c |
+| `js/modes/Intents.js` | 3d |
+| `js/ui/GridRenderer.js` | 4 |

@@ -66,12 +66,26 @@ export class PointMode extends NavigationMode {
     const { cellId, triggerKey = '=' } = payload || {};
 
     this._formulaCellId = cellId;
-    this._baseFormula = triggerKey; // Initialize base formula
+    this._baseFormula = triggerKey; // Initialize base formula (could be '=' or full formula like '=SUM(A1+')
 
-    // Start editing with the trigger character (usually '=')
+    // Start editing with the trigger/formula
     if (this._editorManager && cellId) {
-      this._editorManager.startEdit(cellId, triggerKey, triggerKey);
+      // If triggerKey is just '=', use it as both initialValue and triggerKey
+      // If it's a full formula (from EditMode), use it as initialValue but not as triggerKey
+      const isSingleChar = triggerKey.length === 1;
+      this._editorManager.startEdit(cellId, triggerKey, isSingleChar ? triggerKey : null);
       this._editorManager.focus();
+
+      // For full formulas, position cursor at end
+      if (!isSingleChar) {
+        const editor = document.getElementById('cell-editor');
+        if (editor) {
+          setTimeout(() => {
+            const len = editor.value.length;
+            editor.setSelectionRange(len, len);
+          }, 0);
+        }
+      }
     }
 
     // Update UI to show point state

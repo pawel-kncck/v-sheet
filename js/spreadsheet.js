@@ -53,7 +53,7 @@ export class Spreadsheet {
         value: this.fileManager.getRawCellValue(cellId),
         style: this.fileManager.getCellStyle(cellId)
       };
-    });
+    }, this.selectionManager);
 
     this.historyManager = new HistoryManager(100);
     this.isDraggingCells = false;
@@ -79,6 +79,7 @@ export class Spreadsheet {
       renderer: this.renderer,
       clipboardManager: this.clipboardManager,
       executeCellUpdate: this._executeCellUpdate.bind(this),
+      executePaste: this._handlePaste.bind(this),
       applyRangeFormat: this.applyRangeFormat.bind(this),
       updateModeDisplay: (modeName) => {
         this.statusBar.updateMode(modeName);
@@ -124,6 +125,16 @@ export class Spreadsheet {
 
   setFormulaBar(formulaBar) {
     this.formulaBar = formulaBar;
+
+    // Wire up editor value change callback to sync with formula bar
+    if (this.editor) {
+      this.editor.onValueChange = (value) => {
+        if (this.formulaBar && !this.formulaBar.isEditingFormula) {
+          this.formulaBar.updateFormulaInput(value);
+        }
+      };
+    }
+
     if (this.selectionManager.activeCell) {
       this._updateFormulaBar();
     }

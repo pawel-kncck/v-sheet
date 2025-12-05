@@ -4,21 +4,30 @@ export class ClipboardManager {
   /**
    * @param {GridRenderer} gridRenderer
    * @param {Function} dataGetter - Function(cellId) -> { value, style }
+   * @param {SelectionManager} selectionManager - Optional selection manager for getting ranges
    * Updated signature: dataGetter now returns object with value AND style
    */
-  constructor(gridRenderer, dataGetter) {
+  constructor(gridRenderer, dataGetter, selectionManager = null) {
     this.renderer = gridRenderer;
     this.dataGetter = dataGetter;
+    this.selectionManager = selectionManager;
 
     this.clipboard = {
-      data: null,      
+      data: null,
       sourceRange: null,
-      copiedCellIds: new Set() 
+      copiedCellIds: new Set(),
+      isCut: false
     };
   }
 
-  copy(ranges) {
+  copy(ranges = null) {
     this.clearVisuals();
+
+    // If no ranges provided, get from SelectionManager
+    if (!ranges && this.selectionManager) {
+      ranges = this.selectionManager.ranges;
+    }
+
     if (!ranges || ranges.length === 0) return;
 
     const primaryRange = ranges[ranges.length - 1];
@@ -91,8 +100,36 @@ export class ClipboardManager {
     return updates;
   }
 
+  /**
+   * Paste clipboard data to active cell
+   * @returns {Array} Array of { cellId, value, style } updates
+   */
+  paste() {
+    if (!this.clipboard.data || !this.selectionManager) {
+      Logger.warn('ClipboardManager', 'Cannot paste: no data or no selection');
+      return [];
+    }
+
+    const activeCellCoords = this.selectionManager.activeCell;
+    if (!activeCellCoords) return [];
+
+    return this.getPasteUpdates(activeCellCoords);
+  }
+
+  /**
+   * Cut selected cells (copy + mark for deletion)
+   * @param {Array} ranges - Optional ranges to cut (defaults to current selection)
+   */
+  cut(ranges = null) {
+    // Copy first
+    this.copy(ranges);
+    // Mark for cut (delete after paste)
+    this.clipboard.isCut = true;
+    Logger.log('ClipboardManager', 'Cut operation - cells marked for removal');
+  }
+
   // ... existing helpers ...
-  
+
   clearVisuals() {
     if (this.clipboard.copiedCellIds.size > 0) {
       const cellsToRemove = Array.from(this.clipboard.copiedCellIds);

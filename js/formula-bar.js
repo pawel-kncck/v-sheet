@@ -333,8 +333,12 @@ class FormulaBar {
    * Handle new file creation
    */
   async handleNewFile() {
-    const name = prompt('Enter file name:', 'New Spreadsheet');
-    if (name) {
+    try {
+      const name = prompt('Enter file name:', 'New Spreadsheet');
+      if (!name) {
+        return; // User cancelled
+      }
+
       // Create the new file first
       const newFile = await this.fileManager.createNewFile(name);
 
@@ -361,8 +365,14 @@ class FormulaBar {
           }
         }
       }
-
+    } finally {
+      // Always close dropdown and focus grid
       this.closeFileDropdown();
+
+      // Focus the grid container
+      if (this.spreadsheet && this.spreadsheet.renderer && this.spreadsheet.renderer.cellGridContainer) {
+        this.spreadsheet.renderer.cellGridContainer.focus();
+      }
     }
   }
 
@@ -447,8 +457,14 @@ class FormulaBar {
    * Handle formula input changes
    */
   handleFormulaInput(e) {
-    // Live preview of formula (optional)
-    // This could show formula syntax highlighting or validation
+    const value = this.elements.formulaInput.value;
+
+    // Update the cell editor if it exists and is editing
+    if (this.spreadsheet && this.spreadsheet.editor) {
+      if (this.spreadsheet.editor.isEditing) {
+        this.spreadsheet.editor.setValue(value);
+      }
+    }
   }
 
   /**

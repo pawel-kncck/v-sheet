@@ -230,11 +230,47 @@ export class GridRenderer {
   // ... [Existing drag/resize helper methods if any] ...
   
   showDragGhost(range) {
-     // (Implementation from previous epic)
-     // ... 
-     // Re-implementing basic version to ensure file completeness if it was missing
-     // assuming it's in the previous file content provided.
-     // If not provided in snippet, I will omit for brevity unless requested.
+    // Create ghost element if it doesn't exist
+    let ghost = this.container.querySelector('#drag-ghost');
+    if (!ghost) {
+      ghost = document.createElement('div');
+      ghost.id = 'drag-ghost';
+      this.container.appendChild(ghost);
+    }
+
+    if (!range) {
+      ghost.style.display = 'none';
+      return;
+    }
+
+    const { start, end } = range;
+    const minRow = Math.min(start.row, end.row);
+    const maxRow = Math.max(start.row, end.row);
+    const minCol = Math.min(start.col, end.col);
+    const maxCol = Math.max(start.col, end.col);
+
+    // Get the bounding cells
+    const startCell = this.getCellElementByCoords(minRow, minCol);
+    const endCell = this.getCellElementByCoords(maxRow, maxCol);
+
+    if (!startCell || !endCell) {
+      ghost.style.display = 'none';
+      return;
+    }
+
+    // Calculate dimensions
+    const startRect = startCell.getBoundingClientRect();
+    const endRect = endCell.getBoundingClientRect();
+
+    // Position relative to container
+    ghost.style.left = `${startCell.offsetLeft}px`;
+    ghost.style.top = `${startCell.offsetTop}px`;
+    ghost.style.width = `${endRect.right - startRect.left}px`;
+    ghost.style.height = `${endRect.bottom - startRect.top}px`;
+    ghost.style.display = 'block';
+    ghost.style.transform = 'translate(0, 0)'; // Reset transform
+
+    Logger.log('GridRenderer', `Showing drag ghost for range ${minCol}:${minRow} to ${maxCol}:${maxRow}`);
   }
   
   updateDragGhost(dx, dy) {

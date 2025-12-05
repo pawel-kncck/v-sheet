@@ -29,6 +29,18 @@ export class EditorManager {
     this.isEditing = false;
     this.editingCellId = null; // "A1"
 
+    // Callback for value changes (for formula bar sync)
+    this.onValueChange = null;
+
+    // Add input listener for value synchronization
+    if (this.cellEditor) {
+      this.cellEditor.addEventListener('input', () => {
+        if (this.onValueChange) {
+          this.onValueChange(this.cellEditor.value);
+        }
+      });
+    }
+
     Logger.log('EditorManager', 'Initialized (Mode-based)');
   }
 

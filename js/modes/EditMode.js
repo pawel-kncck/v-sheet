@@ -107,6 +107,9 @@ export class EditMode extends AbstractMode {
    */
   handleIntent(intent, context) {
     switch (intent) {
+      case INTENTS.INPUT:
+        return this._handleInput(context);
+
       case INTENTS.COMMIT:
         return this._handleCommit(context);
 
@@ -130,6 +133,48 @@ export class EditMode extends AbstractMode {
         // Delegate to parent (which will log unhandled intents)
         return super.handleIntent(intent, context);
     }
+  }
+
+  /**
+   * Handles INPUT intent - may switch to PointMode for operators in formulas.
+   *
+   * @private
+   * @param {{ char: string }} context
+   * @returns {boolean}
+   */
+  _handleInput(context) {
+    const { char } = context;
+
+    // Check if we're editing a formula
+    const currentValue = this._editorManager ? this._editorManager.getValue() : '';
+    const isFormula = currentValue.startsWith('=');
+
+    if (!isFormula) {
+      // Not a formula, let browser handle normally
+      return false;
+    }
+
+    // Check if this is an operator that should trigger PointMode
+    const pointModeTriggers = ['+', '-', '*', '/', '(', ',', ':', '<', '>', '=', '&', '^'];
+
+    if (pointModeTriggers.includes(char)) {
+      // Append the operator first
+      const newValue = currentValue + char;
+      this._editorManager.setValue(newValue);
+
+      Logger.log(this.getName(), `Operator "${char}" in formula -> PointMode`);
+
+      // Switch to PointMode with the current formula as base
+      this._requestModeSwitch('point', {
+        cellId: this._editingCellId,
+        triggerKey: newValue  // Pass entire formula as trigger
+      });
+
+      return true;
+    }
+
+    // Regular character in formula - let browser handle
+    return false;
   }
 
   /**

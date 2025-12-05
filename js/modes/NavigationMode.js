@@ -210,7 +210,10 @@ export class NavigationMode extends AbstractMode {
   _handlePaste() {
     // Delegate to ClipboardManager if available
     if (this._context.clipboardManager) {
-      this._context.clipboardManager.paste();
+      const updates = this._context.clipboardManager.paste();
+      if (updates.length > 0 && this._context.executePaste) {
+        this._context.executePaste();
+      }
       Logger.log(this.getName(), 'Paste');
       return true;
     }
