@@ -1,13 +1,37 @@
-It starts all good. User can navigate the grid, when starts typing, the app switched to the "Enter" mode and he can type something. Well.. here we have a first issue already - the status bar shows correct mode, but the active cell is always A1 and doesn't change.
+(1) After adding new file, the file selection menu doesn't disappear. It only disappears when user clicks on the grid, but still, there's no focus on the grid. It should load, with A1 as active cell in ready mode.
 
-No... the enter mode doesn't work fully well. When user starts typing, it's looking good, but backspace doesn't work
+(2) Copy / paste doesn't work with ctrl+c and ctrl+v
 
-Another problem is when user exits the enter mode. When the exit with "Enter" it works correctly - edit is commited and mode switches to "ready". But when they exit with an arrow key, the edit is committed (correct), but they are still in the "Enter" mode and can't type anything. Only when they click "Enter" again, it starts working
+(3) Issues with formula bar:
+Formula bar doesn't display anything while typing in a cell. When typing in formula bar, the cell doesn't display anything, but they should be synced.
+When deleting cell value (with backspace), formula bar doesn't update
+By design, formula bar should show formulas and cell should show value. If the cell is only value, they show the same. If the cell is a formula, cell should show the result ready mode and the formula in Enter, Point and Edit mode. Formula bar should always show formula, even in Ready mode
+When user clicks on the formula bar, the app should go into Edit mode, so if the active cell contains a formula and user clicks on the formula bar, the app should switch to Edit mode, so the cell should also display a formula
 
-From the "Ready" mode, typing "=" switched mode to "Point", however, when user navigates with arrow key to another cell, the reference gets added to the formula, but when they navigate to another cell, the new referece appends the existing one, instead of replacing it. So for example, if user types a formula in A1, starts with "=", presses arrow key right they get "=B1", when pressed again they get "=B1C1", when pressed again, they get "=B1C1D1", but in the correct behaviour they should get "=D1" at the end. In the point mode, mouse doesn't work at all.
+When in ready mode, user type "=", the app switches to point mode - which is correct, but when user follows with a letter, for example "C", it doesn't show up. When user presses "enter", the change is correctly committed. So step by step:
 
-User should enter edit mode by double clicking on a cell (it should make the cell active and switch to "edit" mode), by pressing "Enter" or clicking on the formula bar (assuming that they want to edit active cell). Currently pressing "Enter" doesn't work, double click "sort of does" - text in the cell is selected, but nothing can be done - no edits. Arrow keys, that were supposed to get back to default behaviour, are still moving active cell across the grid. The mode doesn't change. It's also impossible to exit a cell - ESC doesn't work, but when exiting a cell via arrow keys, the selection remains. But when user starts typing in another cell, which triggers "Enter" mode, the contant of the cell that was supposed to be edited disappears
+So this is current behavior
+(1) User types "=" in B5 : Application goes into "Point" mode
+(2) User types "B" in B5 : Cell shows nothing
+(3) User types "2" in B5 : Cell shows nothing
+(4) User types "+" in B5 : Cell shows nothing
+(5) User types "B" in B5 : Cell shows nothing
+(6) User types "3" in B5 : Cell shows nothing
+(7) User presses "Enter" : Edit in B5 is commited, active cell moves to B6, Value in B5 is a correct result of the formula
+(8) User presses "Kay Arrow Up" : Active cell moves to B5, Formula bar shows "=B2+B3"
 
-Jump to egde has some issues. It doesn't detect the "edge" after loading a new file, however after first edit, it starts working correctly.
+What it should be:
+(1) User types "=" in B5 : Application goes into "Point" mode
+(2) User types "B" in B5 : Cell shows "=B", app switches to "Edit" mode
+(3) User types "2" in B5 : Cell shows "=B2"
+(4) User types "+" in B5 : Cell shows "=B2+", app switches to "Point" mode, user can use arrow keys to point to a new reference
+(5) User types "B" in B5 : Cell shows "=B2+B", app switches to "Edit" mode
+(6) User types "3" in B5 : Cell shows "=B2+B3"
+(7) User presses "Enter" : Edit in B5 is commited, active cell moves to B6, Value in B5 is a correct result of the formula
+(8) User presses "Kay Arrow Up" : Active cell moves to B5, Formula bar shows "=B2+B3"
 
-Copy / paste doesn't work either, at least not with the ctrl+c / ctrl+v keys
+During the entire time, formula bar is synced with cell in real time and they show the same value
+
+(4) Drag and drop: ghost is not visible while dragging
+
+(5) The app doesn't switch to Point mode from Edit mode after user types an operator (eg. "+")
