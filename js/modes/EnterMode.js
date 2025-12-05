@@ -124,6 +124,11 @@ export class EnterMode extends NavigationMode {
         // Return false to allow browser to handle character input
         return false;
 
+// NEW: Handle DELETE (Backspace) explicitly
+      case INTENTS.DELETE:
+        // Return false to let the browser handle backspace in the input
+        return false;
+
       default:
         // Delegate to NavigationMode parent for other intents
         // (Copy, Paste, Undo, etc.)

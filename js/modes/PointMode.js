@@ -42,11 +42,11 @@ export class PointMode extends NavigationMode {
     /** @private */
     this._formulaCellId = null;
 
-    /** @private */
-    this._initialFormula = '';
+/** @private */
+    this._baseFormula = ''; // Changed from _initialFormula to clarify usage
   }
 
-  /**
+/**
    * Returns the mode identifier.
    *
    * @returns {string}
@@ -66,7 +66,7 @@ export class PointMode extends NavigationMode {
     const { cellId, triggerKey = '=' } = payload || {};
 
     this._formulaCellId = cellId;
-    this._initialFormula = triggerKey;
+    this._baseFormula = triggerKey; // Initialize base formula
 
     // Start editing with the trigger character (usually '=')
     if (this._editorManager && cellId) {
@@ -202,7 +202,7 @@ export class PointMode extends NavigationMode {
    * @param {{ char: string }} context
    * @returns {boolean}
    */
-  _handleInput(context) {
+_handleInput(context) {
     const { char } = context;
 
     // Operators that keep you in point mode
@@ -212,7 +212,11 @@ export class PointMode extends NavigationMode {
       // Append operator to formula and stay in point mode
       if (this._editorManager) {
         const currentValue = this._editorManager.getValue();
-        this._editorManager.setValue(currentValue + char);
+        const newValue = currentValue + char;
+        this._editorManager.setValue(newValue);
+        
+        // NEW: Update base formula so next navigation appends to THIS state
+        this._baseFormula = newValue;
       }
 
       Logger.log(this.getName(), `Operator "${char}" appended, staying in point mode`);
@@ -360,9 +364,8 @@ export class PointMode extends NavigationMode {
       reference = `${startRef}:${endRef}`;
     }
 
-    // Append reference to formula
-    const currentValue = this._editorManager.getValue();
-    this._editorManager.setValue(currentValue + reference);
+    // UPDATED: Use _baseFormula instead of getValue() to prevent appending loops
+    this._editorManager.setValue(this._baseFormula + reference);
 
     Logger.log(this.getName(), `Updated formula with reference: ${reference}`);
   }

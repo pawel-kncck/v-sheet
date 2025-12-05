@@ -227,10 +227,11 @@ export class Spreadsheet {
       }
     });
 
+// UPDATED: Switch mode instead of just starting editor
     this.renderer.on('cellDoubleClick', ({ cellElement }) => {
-      const cellId = cellElement.dataset.id;
-      const rawValue = this.fileManager.getRawCellValue(cellId);
-      this.editor.startEdit(cellId, rawValue);
+      // Don't manually startEdit. Let the Mode system handle the transition.
+      // This ensures we enter 'edit' mode properly so arrow keys don't navigate the grid.
+      this.modeManager.handleIntent('EDIT_START', { source: 'mouse' });
     });
 
     this.renderer.on('headerClick', ({ type, index, event }) => {

@@ -66,9 +66,6 @@ export class AbstractMode {
     this._historyManager = context.historyManager;
     
     /** @protected */
-    this._fileManager = context.fileManager;
-    
-    /** @protected */
     this._formulaWorker = context.formulaWorker;
     
     /** @protected */
@@ -81,6 +78,11 @@ export class AbstractMode {
     this._context = context;
 
     Logger.log('AbstractMode', `${this.constructor.name} instantiated`);
+  }
+  
+  // ADDED: Getter to ensure we always access the current fileManager from context
+  get _fileManager() {
+    return this._context.fileManager;
   }
 
   /**
