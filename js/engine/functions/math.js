@@ -35,11 +35,66 @@ function SUM(...args) {
   }, 0);
 }
 
-// --- Add other math functions here (AVERAGE, COUNT, etc.) ---
+/**
+ * AVERAGE: Calculates the average of all numbers in a range.
+ *
+ * @param {...any} args - A variable number of arguments.
+ * @returns {number} The average of all numeric values.
+ */
+function AVERAGE(...args) {
+  const values = args.flat(Infinity);
+  const numbers = values.filter(v => typeof this.coerce.toNumber(v) === 'number' && !isNaN(this.coerce.toNumber(v)));
+
+  if (numbers.length === 0) {
+    return 0;
+  }
+
+  const sum = numbers.reduce((acc, val) => acc + this.coerce.toNumber(val), 0);
+  return sum / numbers.length;
+}
+
+/**
+ * MIN: Returns the minimum value from a range.
+ *
+ * @param {...any} args - A variable number of arguments.
+ * @returns {number} The minimum numeric value.
+ */
+function MIN(...args) {
+  const values = args.flat(Infinity);
+  const numbers = values
+    .map(v => this.coerce.toNumber(v))
+    .filter(n => typeof n === 'number' && !isNaN(n));
+
+  if (numbers.length === 0) {
+    return 0;
+  }
+
+  return Math.min(...numbers);
+}
+
+/**
+ * MAX: Returns the maximum value from a range.
+ *
+ * @param {...any} args - A variable number of arguments.
+ * @returns {number} The maximum numeric value.
+ */
+function MAX(...args) {
+  const values = args.flat(Infinity);
+  const numbers = values
+    .map(v => this.coerce.toNumber(v))
+    .filter(n => typeof n === 'number' && !isNaN(n));
+
+  if (numbers.length === 0) {
+    return 0;
+  }
+
+  return Math.max(...numbers);
+}
 
 // Export all functions as an object
 export const mathFunctions = {
   SUM,
-  // AVERAGE,
-  // COUNT,
+  AVERAGE,
+  MIN,
+  MAX,
 };

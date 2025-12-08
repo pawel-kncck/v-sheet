@@ -18,6 +18,25 @@ import { Logger } from './utils/Logger.js';
  */
 let engine;
 
+/**
+ * Serializes update values, converting error objects to their string representation.
+ * This is necessary because postMessage doesn't preserve custom toString() methods.
+ * @param {Object} updates - Map of cellId to value
+ * @returns {Object} - Map of cellId to serialized value
+ */
+function serializeUpdates(updates) {
+  const serialized = {};
+  for (const [cellId, value] of Object.entries(updates)) {
+    // If value is an Error-like object with a toString method, use it
+    if (value && typeof value === 'object' && typeof value.toString === 'function' && value.name && value.name.startsWith('#')) {
+      serialized[cellId] = value.toString();
+    } else {
+      serialized[cellId] = value;
+    }
+  }
+  return serialized;
+}
+
 try {
   engine = new FormulaEngine();
   Logger.log('FormulaWorker', 'Engine initialized successfully.'); // <-- CHANGE
@@ -56,9 +75,10 @@ self.onmessage = (event) => {
           initialUpdates[cellId] = cellData.value;
         }
 
+        const serializedInitialUpdates = serializeUpdates(initialUpdates);
         self.postMessage({
           type: 'updates',
-          payload: { updates: initialUpdates },
+          payload: { updates: serializedInitialUpdates },
         });
 
         self.postMessage({ type: 'loadComplete' });
@@ -67,21 +87,25 @@ self.onmessage = (event) => {
       case 'setFormula': {
         const { cellId, formulaString } = payload;
         const updates = engine.setFormula(cellId, formulaString);
-        self.postMessage({ type: 'updates', payload: { updates } });
+        // Convert error objects to their string representation
+        const serializedUpdates = serializeUpdates(updates);
+        self.postMessage({ type: 'updates', payload: { updates: serializedUpdates } });
         break;
       }
 
       case 'setCellValue': {
         const { cellId, value } = payload;
         const updates = engine.setCellValue(cellId, value);
-        self.postMessage({ type: 'updates', payload: { updates } });
+        const serializedUpdates = serializeUpdates(updates);
+        self.postMessage({ type: 'updates', payload: { updates: serializedUpdates } });
         break;
       }
 
       case 'clearCell': {
         const { cellId } = payload;
         const updates = engine.clearCell(cellId);
-        self.postMessage({ type: 'updates', payload: { updates } });
+        const serializedUpdates = serializeUpdates(updates);
+        self.postMessage({ type: 'updates', payload: { updates: serializedUpdates } });
         break;
       }
 

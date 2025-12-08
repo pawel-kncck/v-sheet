@@ -80,9 +80,12 @@ export class ClipboardManager {
 
   /**
    * Returns data for paste operation
+   * @param {Object} targetCell - { row, col } coordinates of target cell
+   * @param {Array} targetSelection - Optional. Array of ranges representing current selection.
+   *                                  If provided and clipboard has single cell, fills entire selection.
    * @returns {Array} Array of { cellId, value, style }
    */
-  getPasteUpdates(targetCell) {
+  getPasteUpdates(targetCell, targetSelection = null) {
     if (!this.clipboard.data) return [];
 
     const updates = [];
@@ -97,28 +100,88 @@ export class ClipboardManager {
     console.log('[ClipboardManager] paste() target:', targetCell, 'offsets:', rowOffset, colOffset);
     console.log('[ClipboardManager] clipboard.data:', JSON.stringify(this.clipboard.data));
 
-    this.clipboard.data.forEach(item => {
-      const destRow = targetRow + item.relativePos.row;
-      const destCol = targetCol + item.relativePos.col;
+    // Check if we have a single cell to paste
+    const isSingleCell = this.clipboard.data.length === 1;
 
-      // Simple bounds check
-      if (destRow > 100 || destCol >= 26) return;
+    // Check if target selection is larger than single cell
+    let shouldFillRange = false;
+    let fillCells = [];
 
-      const destCellId = this._coordsToCellId(destRow, destCol);
+    if (isSingleCell && targetSelection && targetSelection.length > 0) {
+      // Get all cells in the target selection
+      const primaryRange = targetSelection[targetSelection.length - 1];
+      const { start, end } = primaryRange;
+      const minRow = Math.min(start.row, end.row);
+      const maxRow = Math.max(start.row, end.row);
+      const minCol = Math.min(start.col, end.col);
+      const maxCol = Math.max(start.col, end.col);
 
-      let value = item.value;
+      // If selection is larger than 1x1, we should fill
+      const selectionWidth = maxCol - minCol + 1;
+      const selectionHeight = maxRow - minRow + 1;
+      shouldFillRange = (selectionWidth > 1 || selectionHeight > 1);
 
-      // Adjust formula references if this is a formula
-      if (typeof value === 'string' && value.startsWith('=')) {
-        value = FormulaAdjuster.adjustFormula(value, rowOffset, colOffset);
+      if (shouldFillRange) {
+        // Collect all cells in the selection
+        for (let r = minRow; r <= maxRow; r++) {
+          for (let c = minCol; c <= maxCol; c++) {
+            fillCells.push({ row: r, col: c });
+          }
+        }
+        console.log('[ClipboardManager] Fill range detected: filling', fillCells.length, 'cells');
       }
+    }
 
-      updates.push({
-        cellId: destCellId,
-        value: value,
-        style: item.style // <--- Pass style along
+    // If we should fill range, use the fill logic
+    if (shouldFillRange) {
+      const sourceItem = this.clipboard.data[0];
+      const sourceValue = sourceItem.value;
+
+      fillCells.forEach(coords => {
+        // Bounds check
+        if (coords.row > 100 || coords.col >= 26) return;
+
+        const destCellId = this._coordsToCellId(coords.row, coords.col);
+        let value = sourceValue;
+
+        // For fill range, we adjust formulas relative to each cell
+        if (typeof value === 'string' && value.startsWith('=')) {
+          const fillRowOffset = coords.row - targetRow;
+          const fillColOffset = coords.col - targetCol;
+          value = FormulaAdjuster.adjustFormula(sourceValue, fillRowOffset, fillColOffset);
+        }
+
+        updates.push({
+          cellId: destCellId,
+          value: value,
+          style: sourceItem.style
+        });
       });
-    });
+    } else {
+      // Standard paste logic - paste range at target position
+      this.clipboard.data.forEach(item => {
+        const destRow = targetRow + item.relativePos.row;
+        const destCol = targetCol + item.relativePos.col;
+
+        // Simple bounds check
+        if (destRow > 100 || destCol >= 26) return;
+
+        const destCellId = this._coordsToCellId(destRow, destCol);
+
+        let value = item.value;
+
+        // Adjust formula references if this is a formula
+        if (typeof value === 'string' && value.startsWith('=')) {
+          value = FormulaAdjuster.adjustFormula(value, rowOffset, colOffset);
+        }
+
+        updates.push({
+          cellId: destCellId,
+          value: value,
+          style: item.style // <--- Pass style along
+        });
+      });
+    }
 
     return updates;
   }

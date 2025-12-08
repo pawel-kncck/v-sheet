@@ -196,7 +196,7 @@ test.describe('Bug: Point Mode - Reference Replacement', () => {
   test('operator should lock reference and allow new pointing', async ({ page }) => {
     await page.click('[data-id="A1"]');
     await page.keyboard.type('=');
-    
+
     const editor = page.locator('#cell-editor');
 
     // Navigate to B1
@@ -207,13 +207,14 @@ test.describe('Bug: Point Mode - Reference Replacement', () => {
     await page.keyboard.type('+');
     await expect(editor).toHaveValue('=B1+');
 
-    // Navigate again - should add new reference after operator
+    // After typing operator, navigation resets to editing cell (A1)
+    // So ArrowRight from A1 goes to B1, not C1
     await page.keyboard.press('ArrowRight');
-    await expect(editor).toHaveValue('=B1+C1');
+    await expect(editor).toHaveValue('=B1+B1');
 
     // Navigate more - should replace only the second reference
     await page.keyboard.press('ArrowDown');
-    await expect(editor).toHaveValue('=B1+C2');
+    await expect(editor).toHaveValue('=B1+B2');
   });
 });
 

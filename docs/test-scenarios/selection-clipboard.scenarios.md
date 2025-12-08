@@ -871,6 +871,335 @@ test('Paste formula with mixed references', async ({ page }) => {
 
 ---
 
+### Scenario 17.5: Paste Multi-Cell Range to Single Cell (Auto-Expand)
+
+**Given** user has copied range A1:A3 containing [10, 20, 30]
+**When** user selects B1 (single cell) and presses Cmd+V
+**Then**
+- Paste automatically expands to B1:B3
+- B1=10, B2=20, B3=30
+- Source range determines paste size, not target selection
+
+**Playwright Implementation**:
+```javascript
+test('Paste range to single cell auto-expands', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  // Create source range A1:A3
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('10');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('30');
+  await page.keyboard.press('Enter');
+
+  // Copy A1:A3
+  await page.locator('[data-cell="A1"]').click();
+  await page.locator('[data-cell="A3"]').click({ modifiers: ['Shift'] });
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Paste to single cell B1
+  await page.locator('[data-cell="B1"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // Verify B1:B3 contains the values
+  await expect(page.locator('[data-cell="B1"]')).toHaveText('10');
+  await expect(page.locator('[data-cell="B2"]')).toHaveText('20');
+  await expect(page.locator('[data-cell="B3"]')).toHaveText('30');
+});
+```
+
+**What This Tests**:
+- Paste uses source range size, not target selection size
+- Clipboard manager expands paste from anchor cell
+- Standard spreadsheet behavior (Excel/Google Sheets compatible)
+
+---
+
+### Scenario 17.6: Paste Single Cell to Multi-Cell Selection (Fill Range)
+
+**Given** user has copied cell A1 containing "100"
+**When** user selects range B1:B3 and presses Cmd+V
+**Then**
+- **Option A (Fill)**: All cells B1, B2, B3 contain "100" (fill behavior)
+- **Option B (Single)**: Only B1 contains "100", B2:B3 unchanged (anchor-only behavior)
+
+**Playwright Implementation (Option A - Fill)**:
+```javascript
+test('Paste single cell to range fills all cells', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  // Create source cell
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('100');
+  await page.keyboard.press('Enter');
+
+  // Copy A1
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Select range B1:B3
+  await page.locator('[data-cell="B1"]').click();
+  await page.locator('[data-cell="B3"]').click({ modifiers: ['Shift'] });
+
+  // Paste
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // All cells should contain "100"
+  await expect(page.locator('[data-cell="B1"]')).toHaveText('100');
+  await expect(page.locator('[data-cell="B2"]')).toHaveText('100');
+  await expect(page.locator('[data-cell="B3"]')).toHaveText('100');
+});
+```
+
+**What This Tests**:
+- Behavior when target selection is larger than source
+- Design decision: fill vs. anchor-only paste
+- Excel behavior: fills the range; Google Sheets: anchor-only
+
+**Implementation Note**: Current implementation likely uses anchor-only (Option B). If you want Excel-style fill behavior, this requires enhancement to `ClipboardManager.getPasteUpdates()`.
+
+---
+
+### Scenario 17.7: Paste Range to Larger Selection (Tile or Truncate)
+
+**Given** user has copied range A1:A2 containing [10, 20]
+**When** user selects range B1:B5 (larger than source) and presses Cmd+V
+**Then**
+- **Option A (Tile)**: Pattern repeats - B1=10, B2=20, B3=10, B4=20, B5=10
+- **Option B (Single Copy)**: Only B1:B2 filled, B3:B5 unchanged
+- **Option C (Error)**: Warning "Cannot paste: selection size mismatch"
+
+**Playwright Implementation (Option B - Single Copy)**:
+```javascript
+test('Paste range to larger selection pastes once at anchor', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  // Create source range
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('10');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+
+  // Copy A1:A2
+  await page.locator('[data-cell="A1"]').click();
+  await page.locator('[data-cell="A2"]').click({ modifiers: ['Shift'] });
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Select larger range B1:B5
+  await page.locator('[data-cell="B1"]').click();
+  await page.locator('[data-cell="B5"]').click({ modifiers: ['Shift'] });
+
+  // Paste
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // Only B1:B2 should be filled
+  await expect(page.locator('[data-cell="B1"]')).toHaveText('10');
+  await expect(page.locator('[data-cell="B2"]')).toHaveText('20');
+  await expect(page.locator('[data-cell="B3"]')).toHaveText('');
+  await expect(page.locator('[data-cell="B4"]')).toHaveText('');
+  await expect(page.locator('[data-cell="B5"]')).toHaveText('');
+});
+```
+
+**What This Tests**:
+- Behavior when target is larger than source
+- Current implementation: likely ignores target selection size
+- Excel behavior: requires exact size match or shows error
+
+---
+
+### Scenario 17.8: Paste Range to Smaller Selection (Error or Expand)
+
+**Given** user has copied range A1:A5 containing [10, 20, 30, 40, 50]
+**When** user selects range B1:B3 (smaller than source) and presses Cmd+V
+**Then**
+- **Option A (Expand)**: Paste ignores target size, fills B1:B5
+- **Option B (Truncate)**: Only B1:B3 filled with first 3 values
+- **Option C (Error)**: Warning "Cannot paste: selection too small"
+
+**Playwright Implementation (Option A - Expand)**:
+```javascript
+test('Paste range to smaller selection expands to source size', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  // Create source range A1:A5
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('10');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('30');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('40');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('50');
+  await page.keyboard.press('Enter');
+
+  // Copy A1:A5
+  await page.locator('[data-cell="A1"]').click();
+  await page.locator('[data-cell="A5"]').click({ modifiers: ['Shift'] });
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Select smaller range B1:B3
+  await page.locator('[data-cell="B1"]').click();
+  await page.locator('[data-cell="B3"]').click({ modifiers: ['Shift'] });
+
+  // Paste
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // All 5 values should paste (expands beyond selection)
+  await expect(page.locator('[data-cell="B1"]')).toHaveText('10');
+  await expect(page.locator('[data-cell="B2"]')).toHaveText('20');
+  await expect(page.locator('[data-cell="B3"]')).toHaveText('30');
+  await expect(page.locator('[data-cell="B4"]')).toHaveText('40');
+  await expect(page.locator('[data-cell="B5"]')).toHaveText('50');
+});
+```
+
+**What This Tests**:
+- Behavior when target is smaller than source
+- Standard behavior: paste ignores target selection size
+- Excel/Google Sheets: always use source range dimensions
+
+---
+
+### Scenario 17.9: Paste 2D Range to Different Shape Selection
+
+**Given** user has copied range A1:A3 (3 rows × 1 column) containing [10, 20, 30]
+**When** user selects range B1:D1 (1 row × 3 columns) and presses Cmd+V
+**Then**
+- **Option A (Shape Mismatch)**: Paste uses source shape, fills B1:B3 vertically
+- **Option B (Error)**: Warning "Cannot paste: shape mismatch"
+
+**Playwright Implementation (Option A)**:
+```javascript
+test('Paste range ignores target selection shape', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  // Create vertical source A1:A3
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('10');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('30');
+  await page.keyboard.press('Enter');
+
+  // Copy A1:A3
+  await page.locator('[data-cell="A1"]').click();
+  await page.locator('[data-cell="A3"]').click({ modifiers: ['Shift'] });
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Select horizontal range B1:D1
+  await page.locator('[data-cell="B1"]').click();
+  await page.locator('[data-cell="D1"]').click({ modifiers: ['Shift'] });
+
+  // Paste
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // Should paste vertically at B1:B3 (ignoring horizontal selection)
+  await expect(page.locator('[data-cell="B1"]')).toHaveText('10');
+  await expect(page.locator('[data-cell="B2"]')).toHaveText('20');
+  await expect(page.locator('[data-cell="B3"]')).toHaveText('30');
+  await expect(page.locator('[data-cell="C1"]')).toHaveText('');
+  await expect(page.locator('[data-cell="D1"]')).toHaveText('');
+});
+```
+
+**What This Tests**:
+- Paste always uses source range shape
+- Target selection shape is ignored
+- Standard spreadsheet behavior
+
+---
+
+### Scenario 17.10: Paste Range with Formulas to Multi-Cell (Reference Adjustment for Each Cell)
+
+**Given** user has copied range A1:A2 containing ["=B1", "=B2"]
+**When** user selects C1 and pastes
+**Then**
+- C1 contains "=D1" (relative reference adjusted)
+- C2 contains "=D2" (each formula adjusted independently)
+
+**Playwright Implementation**:
+```javascript
+test('Paste range of formulas adjusts each reference independently', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  // Set up reference cells
+  await page.locator('[data-cell="B1"]').click();
+  await page.keyboard.type('100');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('200');
+  await page.keyboard.press('Enter');
+
+  // Create formula range A1:A2
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('=B1');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('=B2');
+  await page.keyboard.press('Enter');
+
+  // Verify formulas work
+  await expect(page.locator('[data-cell="A1"]')).toHaveText('100');
+  await expect(page.locator('[data-cell="A2"]')).toHaveText('200');
+
+  // Copy A1:A2
+  await page.locator('[data-cell="A1"]').click();
+  await page.locator('[data-cell="A2"]').click({ modifiers: ['Shift'] });
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Set up new reference cells
+  await page.locator('[data-cell="D1"]').click();
+  await page.keyboard.type('10');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+
+  // Paste to C1
+  await page.locator('[data-cell="C1"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // Each formula should reference D column
+  await expect(page.locator('[data-cell="C1"]')).toHaveText('10');
+  await expect(page.locator('[data-cell="C2"]')).toHaveText('20');
+});
+```
+
+**What This Tests**:
+- Multi-cell paste with formulas
+- Independent reference adjustment for each pasted cell
+- FormulaAdjuster handles each cell in the range
+
+---
+
 ### Scenario 18: Paste Styles Along with Values
 
 **Given** user has copied cell B2 with bold text and background color
@@ -1361,7 +1690,7 @@ test('Cut and paste is a single undoable action', async ({ page }) => {
 
 ## Summary
 
-These 27 scenarios provide comprehensive coverage of:
+These 33 scenarios provide comprehensive coverage of:
 
 **Selection**:
 - Single cell, range, multi-range
@@ -1376,7 +1705,14 @@ These 27 scenarios provide comprehensive coverage of:
 
 **Paste**:
 - Value paste with relative positioning
-- Formula paste with reference adjustment
+- Formula paste with reference adjustment (absolute, relative, mixed)
+- **Range size mismatches** (source vs. target selection):
+  - Multi-cell to single cell (auto-expand)
+  - Single cell to multi-cell (fill or anchor-only)
+  - Range to larger selection (tile or truncate)
+  - Range to smaller selection (expand or error)
+  - Different shape selections (vertical vs. horizontal)
+- Range of formulas with independent reference adjustment
 - Style paste (with formatting system)
 - Bounds checking
 
@@ -1402,11 +1738,13 @@ These 27 scenarios provide comprehensive coverage of:
 **High Priority** (Core Functionality):
 - Scenarios 1-6 (Basic selection)
 - Scenarios 12-16 (Copy and paste basics)
+- Scenario 17.5 (Multi-cell to single cell paste - auto-expand)
 - Scenario 19 (Cut and paste)
 
 **Medium Priority** (Extended Features):
 - Scenarios 7-11 (Keyboard selection)
 - Scenarios 17-17.4 (Formula paste with absolute/relative references)
+- Scenarios 17.6-17.10 (Range size mismatches and formula ranges)
 - Scenario 18 (Style paste)
 - Scenarios 20-21 (Cut operations)
 

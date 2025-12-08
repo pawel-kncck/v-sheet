@@ -77,12 +77,25 @@ export class EditorManager {
     this.cellEditor.style.fontSize = computedStyle.fontSize;
     this.cellEditor.style.fontWeight = computedStyle.fontWeight;
     this.cellEditor.style.fontStyle = computedStyle.fontStyle;
-    this.cellEditor.style.color = computedStyle.color;
+
+    // Ensure text is always visible - don't copy transparent colors
+    const cellColor = computedStyle.color;
+    if (cellColor === 'rgba(0, 0, 0, 0)' || cellColor === 'transparent') {
+      this.cellEditor.style.color = '#000000'; // Default to black text
+    } else {
+      this.cellEditor.style.color = cellColor;
+    }
+
     this.cellEditor.style.textAlign = computedStyle.textAlign;
     this.cellEditor.style.backgroundColor = computedStyle.backgroundColor;
 
     // 2. Set Value
     this.cellEditor.value = triggerKey ? triggerKey : initialValue;
+
+    // Trigger onValueChange to sync with formula bar
+    if (this.onValueChange) {
+      this.onValueChange(this.cellEditor.value);
+    }
 
     // 3. Visuals
     cellElement.classList.add('editing');
@@ -158,6 +171,10 @@ export class EditorManager {
   setValue(value) {
     if (this.cellEditor) {
       this.cellEditor.value = value;
+      // Trigger the onValueChange callback to sync with formula bar
+      if (this.onValueChange) {
+        this.onValueChange(value);
+      }
     }
   }
 

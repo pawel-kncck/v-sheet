@@ -22,7 +22,9 @@ import { logicalFunctions } from './logical.js';
 export function registerFunctions(registry) {
   // 2. Register the Math functions
   registry.register('SUM', mathFunctions.SUM);
-  // registry.register("AVERAGE", mathFunctions.AVERAGE); // ...etc
+  registry.register('AVERAGE', mathFunctions.AVERAGE);
+  registry.register('MIN', mathFunctions.MIN);
+  registry.register('MAX', mathFunctions.MAX);
 
   // 3. Register the Logical functions
   registry.register('IF', logicalFunctions.IF);

@@ -27,6 +27,7 @@ import { NavigationMode } from './NavigationMode.js';
 import { INTENTS } from './Intents.js';
 import { Logger } from '../engine/utils/Logger.js';
 import { FormulaAdjuster } from '../engine/utils/FormulaAdjuster.js';
+import { CellHelpers } from '../engine/utils/CellHelpers.js';
 
 /**
  * Point mode for formula building.
@@ -43,8 +44,11 @@ export class PointMode extends NavigationMode {
     /** @private */
     this._formulaCellId = null;
 
-/** @private */
+    /** @private */
     this._baseFormula = ''; // Changed from _initialFormula to clarify usage
+
+    /** @private */
+    this._suppressFormulaUpdate = false; // Flag to prevent unwanted formula updates
   }
 
 /**
@@ -232,12 +236,28 @@ _handleInput(context) {
         const currentValue = this._editorManager.getValue();
         const newValue = currentValue + char;
         this._editorManager.setValue(newValue);
-        
+
         // NEW: Update base formula so next navigation appends to THIS state
         this._baseFormula = newValue;
       }
 
-      Logger.log(this.getName(), `Operator "${char}" appended, staying in point mode`);
+      // CRITICAL FIX: Reset selection back to the editing cell
+      // After typing an operator, navigation should start from the editing cell,
+      // not from the cell that was just pointed to
+      if (this._selectionManager && this._formulaCellId) {
+        const parsedCell = CellHelpers.parseCellRef(this._formulaCellId);
+        if (parsedCell) {
+          // NOTE: SelectionManager uses 1-based rows internally, but CellHelpers returns 0-based
+          // So we need to convert: add 1 to the row
+          const editingCoords = { row: parsedCell.row + 1, col: parsedCell.col };
+          // Temporarily suppress formula updates while we reset the selection
+          this._suppressFormulaUpdate = true;
+          this._selectionManager.selectCell(editingCoords, false, false);
+          this._suppressFormulaUpdate = false;
+        }
+      }
+
+      Logger.log(this.getName(), `Operator "${char}" appended, staying in point mode, selection reset to editing cell`);
       return true;
     } else {
       // Letter/number - switch to edit mode
@@ -360,6 +380,12 @@ _handleInput(context) {
    */
   _updateFormulaWithCurrentSelection() {
     if (!this._editorManager) return;
+
+    // Skip update if suppressed (when we're just resetting selection position)
+    if (this._suppressFormulaUpdate) {
+      Logger.log(this.getName(), `Formula update suppressed`);
+      return;
+    }
 
     // Get current selection
     const selection = this._selectionManager.getSelection();

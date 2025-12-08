@@ -569,7 +569,9 @@ export class Spreadsheet {
     const activeCellCoords = this.selectionManager.activeCell;
     if (!activeCellCoords) return;
 
-    const updates = this.clipboardManager.getPasteUpdates(activeCellCoords);
+    // Pass current selection ranges to support fill range behavior
+    const targetSelection = this.selectionManager.ranges;
+    const updates = this.clipboardManager.getPasteUpdates(activeCellCoords, targetSelection);
     if (updates.length === 0) return;
 
     const cellUpdates = updates.map(update => ({
@@ -622,8 +624,12 @@ export class Spreadsheet {
     const cellId = this.selectionManager.getActiveCellId();
     if (cellId) {
       this.formulaBar.updateCellReference(cellId);
-      const raw = this.fileManager.getRawCellValue(cellId);
-      this.formulaBar.updateFormulaInput(raw);
+      // Only update formula input if editor is not currently active
+      // This prevents overwriting in-progress edits when selection changes
+      if (!this.editor.isVisible()) {
+        const raw = this.fileManager.getRawCellValue(cellId);
+        this.formulaBar.updateFormulaInput(raw);
+      }
     }
   }
 
