@@ -190,8 +190,10 @@ export class NavigationMode extends AbstractMode {
    * @returns {boolean}
    */
   _handleCopy() {
+    console.log('[NavigationMode] _handleCopy called');
     // Delegate to ClipboardManager if available
     if (this._context.clipboardManager) {
+      console.log('[NavigationMode] Calling clipboardManager.copy()');
       this._context.clipboardManager.copy();
       Logger.log(this.getName(), 'Copy');
       return true;
@@ -208,17 +210,14 @@ export class NavigationMode extends AbstractMode {
    * @returns {boolean}
    */
   _handlePaste() {
-    // Delegate to ClipboardManager if available
-    if (this._context.clipboardManager) {
-      const updates = this._context.clipboardManager.paste();
-      if (updates.length > 0 && this._context.executePaste) {
-        this._context.executePaste();
-      }
+    // Delegate to executePaste which will handle the full paste operation
+    if (this._context.executePaste) {
+      this._context.executePaste();
       Logger.log(this.getName(), 'Paste');
       return true;
     }
 
-    Logger.warn(this.getName(), 'ClipboardManager not available');
+    Logger.warn(this.getName(), 'executePaste not available');
     return false;
   }
 

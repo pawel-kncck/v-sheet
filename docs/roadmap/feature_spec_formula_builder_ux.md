@@ -115,10 +115,38 @@ To replicate Excel's feel, the Formula Builder must track the **Origin** of the 
 
 ### 3.6. Advanced References
 
-- **F4 Toggle:** Cycles reference types (`A1` -\> `$A$1` -\> `A$1` -\> `$A1`).
-  - Works on both `POINTED` and `TYPED` references.
-- **Open-Ended Ranges:** Support for `A1:A` (Range to bottom of column).
-  - Visuals: Highlight the entire column column starting from A1.
+#### F4 Toggle (Absolute Reference Cycling)
+
+The F4 key cycles a cell reference through four formats that control how references adjust when formulas are copied:
+
+- **Cycle Sequence:** `A1` → `$A$1` → `A$1` → `$A1` → `A1` (loops back)
+- **Format Meanings:**
+  - `A1`: Relative - both column and row adjust when copied
+  - `$A$1`: Fully absolute - neither column nor row adjust
+  - `A$1`: Row absolute - only column adjusts
+  - `$A1`: Column absolute - only row adjusts
+
+**Behavior in PointMode (Navigation Mode):**
+- When the cursor is at the end of a formula with a `POINTED` reference, pressing F4 cycles that reference
+- The visual feedback (dancing ants border) remains active
+- The baseFormula is updated to reflect the new reference format
+- Multiple F4 presses continue cycling through all four formats
+
+**Behavior in EditMode (Text Input Mode):**
+- F4 cycles the reference at or before the current cursor position
+- Works on both `POINTED` and `TYPED` references
+- If the cursor is within a range (e.g., `A1:B2`), F4 cycles both parts of the range independently on subsequent presses (Excel behavior)
+- If no reference is found at the cursor, F4 has no effect
+
+**Implementation Notes:**
+- Uses `FormulaAdjuster.cycleReferenceFormat(ref)` utility method
+- The parser must preserve `$` markers during tokenization
+- Visual highlighting updates to show the new reference format immediately
+
+#### Open-Ended Ranges
+
+- **Support for `A1:A`:** Range to bottom of column
+  - Visuals: Highlight the entire column starting from A1
 
 ---
 

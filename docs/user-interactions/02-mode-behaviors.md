@@ -159,6 +159,7 @@ In this mode:
 | **Cmd+A** | Selects all text in editor | Browser default behavior | Stay in Edit |
 | **Backspace** | Deletes character before cursor | Browser default behavior | Stay in Edit |
 | **Delete** | Deletes character after cursor | Browser default behavior | Stay in Edit |
+| **F4** (on formula with reference) | Reference at cursor cycles format (A1 → $A$1 → A$1 → $A1) | FormulaAdjuster cycles reference | Stay in Edit |
 | **Enter** | Content commits, selection moves down | UpdateCellsCommand executes | Edit → **Ready** |
 | **Tab** | Content commits, selection moves right | UpdateCellsCommand executes | Edit → **Ready** |
 | **Escape** | Edit cancelled, original content restored | EditorManager deactivates | Edit → **Ready** |
@@ -226,6 +227,7 @@ PointMode activates when you **start a formula** by typing `=`, `+`, or `-`. Thi
 | **Enter** | Formula commits, result calculated | UpdateCellsCommand, worker calculates | Point → **Ready** |
 | **Tab** | Formula commits, selection moves right | UpdateCellsCommand executes | Point → **Ready** |
 | **Escape** | Formula cancelled, cell unchanged | EditorManager deactivates | Point → **Ready** |
+| **F4** | Reference cycles format (A1 → $A$1 → A$1 → $A1) | FormulaAdjuster cycles reference | Stay in Point |
 | **F2** | Switches to manual formula editing | Enable text cursor | Point → **Edit** |
 
 ### Key Behavior: Reference Updating vs Appending

@@ -88,6 +88,22 @@ class CellHelpers {
   }
 
   /**
+   * Creates a cell reference string with optional absolute markers.
+   * @param {number} row - 0-based row index.
+   * @param {number} col - 0-based column index.
+   * @param {boolean} colAbs - Whether column is absolute ($).
+   * @param {boolean} rowAbs - Whether row is absolute ($).
+   * @returns {string} Cell reference (e.g., "$A$1", "B2", "$A1", "B$1").
+   */
+  static buildCellRef(row, col, colAbs = false, rowAbs = false) {
+    const colStr = this.colIdxToLetter(col);
+    const rowStr = row + 1; // 0-based to 1-based
+    const colPrefix = colAbs ? '$' : '';
+    const rowPrefix = rowAbs ? '$' : '';
+    return `${colPrefix}${colStr}${rowPrefix}${rowStr}`;
+  }
+
+  /**
    * Expands a range (e.g., "A1:B2") into an array of cell IDs.
    * @param {string} startCell - The top-left cell of the range (e.g., "A1").
    * @param {string} endCell - The bottom-right cell of the range (e.g., "B2").
@@ -116,24 +132,34 @@ class CellHelpers {
   }
 
   /**
-   * Resolves a cell reference relative to a base cell.
+   * Resolves a cell reference with offset, preserving absolute ($) markers.
    * (This is a more advanced function for copy/paste and formula filling)
    *
-   * @param {Object} ref - The parsed reference (from parseCellRef).
-   * @param {Object} base - The parsed base cell { row, col } (from parseCellRef).
+   * @param {Object} ref - The parsed reference (from parseCellRef) with {row, col, colAbs, rowAbs}.
    * @param {number} rowOffset - The number of rows to offset (e.g., for copy-paste).
    * @param {number} colOffset - The number of columns to offset.
-   * @returns {string} The new, resolved cell ID.
+   * @returns {string} The new, resolved cell reference with preserved $ markers.
    */
-  static resolveRelativeRef(ref, base, rowOffset = 0, colOffset = 0) {
-    const newRow = ref.rowAbs ? ref.row : ref.row - base.row + rowOffset;
-    const newCol = ref.colAbs ? ref.col : ref.col - base.col + colOffset;
+  static resolveRelativeRef(ref, rowOffset = 0, colOffset = 0) {
+    const newRow = ref.rowAbs ? ref.row : ref.row + rowOffset;
+    const newCol = ref.colAbs ? ref.col : ref.col + colOffset;
 
-    // Ensure we don't go off the grid (e.g., negative indices)
+    // Clamp to valid grid bounds
     const finalRow = Math.max(0, newRow);
     const finalCol = Math.max(0, newCol);
 
-    return this.buildCellId(finalRow, finalCol);
+    // Preserve absolute markers
+    return this.buildCellRef(finalRow, finalCol, ref.colAbs, ref.rowAbs);
+  }
+
+  /**
+   * Normalizes a cell reference by removing $ markers.
+   * This is used when looking up cell data, as internal storage uses normalized IDs.
+   * @param {string} cellRef - Cell reference (e.g., "$A$1", "A1", "$A1", "A$1")
+   * @returns {string} Normalized cell ID without $ markers (e.g., "A1")
+   */
+  static normalizeCellId(cellRef) {
+    return cellRef.replace(/\$/g, '');
   }
 }
 

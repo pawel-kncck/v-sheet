@@ -124,6 +124,8 @@ export class InputController {
     // Normalize modifiers
     const modifiers = this._normalizeModifiers(event);
 
+    console.log('[InputController] keydown:', event.key, 'ctrl:', modifiers.ctrl, 'meta:', event.metaKey);
+
     // Map key + modifiers to intent
     const intentData = this._mapKeyToIntent(event.key, modifiers, event);
 
@@ -134,10 +136,13 @@ export class InputController {
 
     const { intent, context } = intentData;
 
+    console.log('[InputController] Key "' + event.key + '" → Intent "' + intent + '"');
     Logger.log('InputController', `Key "${event.key}" → Intent "${intent}"`, context || '');
 
     // Delegate to ModeManager
     const handled = this._modeManager.handleIntent(intent, context);
+
+    console.log('[InputController] Intent handled:', handled);
 
     if (handled) {
       event.preventDefault();
@@ -218,6 +223,9 @@ export class InputController {
   _mapKeyToIntent(key, modifiers, event) {
     const { ctrl, shift, alt } = modifiers;
 
+    // Normalize key to lowercase for consistent comparison
+    const normalizedKey = key.toLowerCase();
+
     // Navigation: Arrow keys
     if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight') {
       const directionMap = {
@@ -283,8 +291,16 @@ export class InputController {
       };
     }
 
+    // F4: Toggle reference format
+    if (key === 'F4') {
+      return {
+        intent: INTENTS.TOGGLE_REFERENCE,
+        context: null
+      };
+    }
+
     // Ctrl+Z: Undo
-    if (ctrl && !shift && key === 'z') {
+    if (ctrl && !shift && normalizedKey === 'z') {
       return {
         intent: INTENTS.UNDO,
         context: null
@@ -292,7 +308,7 @@ export class InputController {
     }
 
     // Ctrl+Y or Ctrl+Shift+Z: Redo
-    if ((ctrl && key === 'y') || (ctrl && shift && key === 'z')) {
+    if ((ctrl && normalizedKey === 'y') || (ctrl && shift && normalizedKey === 'z')) {
       return {
         intent: INTENTS.REDO,
         context: null
@@ -300,7 +316,7 @@ export class InputController {
     }
 
     // Ctrl+C: Copy
-    if (ctrl && key === 'c') {
+    if (ctrl && normalizedKey === 'c') {
       return {
         intent: INTENTS.COPY,
         context: null
@@ -308,7 +324,7 @@ export class InputController {
     }
 
     // Ctrl+V: Paste
-    if (ctrl && key === 'v') {
+    if (ctrl && normalizedKey === 'v') {
       return {
         intent: INTENTS.PASTE,
         context: null
@@ -316,7 +332,7 @@ export class InputController {
     }
 
     // Ctrl+X: Cut
-    if (ctrl && key === 'x') {
+    if (ctrl && normalizedKey === 'x') {
       return {
         intent: INTENTS.CUT,
         context: null
@@ -324,7 +340,7 @@ export class InputController {
     }
 
     // Ctrl+A: Select All
-    if (ctrl && key === 'a') {
+    if (ctrl && normalizedKey === 'a') {
       return {
         intent: INTENTS.SELECT_ALL,
         context: null
@@ -332,7 +348,7 @@ export class InputController {
     }
 
     // Ctrl+B: Bold
-    if (ctrl && key === 'b') {
+    if (ctrl && normalizedKey === 'b') {
       return {
         intent: INTENTS.FORMAT_BOLD,
         context: null
@@ -340,7 +356,7 @@ export class InputController {
     }
 
     // Ctrl+I: Italic
-    if (ctrl && key === 'i') {
+    if (ctrl && normalizedKey === 'i') {
       return {
         intent: INTENTS.FORMAT_ITALIC,
         context: null

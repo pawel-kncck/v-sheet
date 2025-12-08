@@ -212,6 +212,36 @@ if (intent === 'NAVIGATE') {
 
 ---
 
+#### TOGGLE_REFERENCE
+**Purpose**: User wants to cycle absolute/relative reference format
+
+**Triggered by**:
+- F4 key (in EditMode or PointMode while editing formula)
+
+**Context Object**:
+```javascript
+{
+  // No additional context needed - operates on current editor state
+}
+```
+
+**Mode Behaviors**:
+| Mode | Behavior |
+|------|----------|
+| **Ready** | No effect (not editing) |
+| **Enter** | No effect (not in formula) |
+| **Edit** | Cycles reference at cursor position (A1 → $A$1 → A$1 → $A1 → A1) |
+| **Point** | Cycles current reference in formula |
+
+**Cycle Sequence**:
+1. `A1` (Relative) → both column and row adjust when copied
+2. `$A$1` (Fully absolute) → neither column nor row adjust
+3. `A$1` (Row absolute) → only column adjusts
+4. `$A1` (Column absolute) → only row adjusts
+5. Back to `A1` (loops)
+
+---
+
 ### Selection Intents
 
 #### CELL_SELECT
@@ -663,6 +693,7 @@ test('ReadyMode handles NAVIGATE intent', () => {
 | **COMMIT** | Save and exit | Enter, Tab | ✅ Implemented |
 | **CANCEL** | Discard and exit | Escape | ✅ Implemented |
 | **EDIT_START** | Enter edit mode | F2, Double-click, Enter | ✅ Implemented |
+| **TOGGLE_REFERENCE** | Cycle absolute/relative | F4 | ✅ Implemented |
 | **CELL_SELECT** | Select cell | Mouse click | ✅ Implemented |
 | **HEADER_SELECT** | Select column/row | Header click | ✅ Implemented |
 | **COPY** | Copy selection | Cmd+C | ✅ Implemented |

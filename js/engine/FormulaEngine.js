@@ -228,7 +228,9 @@ class FormulaEngine {
    * @returns {*} The calculated value, or `undefined` if empty.
    */
   getCellValue(cellId) {
-    const data = this.cellData.get(cellId);
+    // Normalize cell ID to strip $ markers (e.g., "$A$1" → "A1")
+    const normalizedId = this.cellHelpers.normalizeCellId(cellId);
+    const data = this.cellData.get(normalizedId);
     return data ? data.value : undefined;
   }
 
@@ -245,12 +247,15 @@ class FormulaEngine {
 
   /**
    * Gets an array of values for a range.
-   * @param {string} startCell - e.g., "A1"
-   * @param {string} endCell - e.g., "B2"
+   * @param {string} startCell - e.g., "A1" or "$A$1"
+   * @param {string} endCell - e.g., "B2" or "$B$2"
    * @returns {Array<*>} A 1D array of values.
    */
   getRangeValues(startCell, endCell) {
-    const cellIds = this.cellHelpers.expandRange(startCell, endCell);
+    // Normalize range endpoints to strip $ markers before expanding
+    const normalizedStart = this.cellHelpers.normalizeCellId(startCell);
+    const normalizedEnd = this.cellHelpers.normalizeCellId(endCell);
+    const cellIds = this.cellHelpers.expandRange(normalizedStart, normalizedEnd);
     return cellIds.map((id) => this.getCellValue(id));
   }
 
@@ -303,11 +308,15 @@ class FormulaEngine {
 
       switch (node.type) {
         case 'cell':
-          dependencies.add(node.ref);
+          // Normalize cell ID to strip $ markers before adding to dependencies
+          dependencies.add(this.cellHelpers.normalizeCellId(node.ref));
           return;
         case 'range':
+          // Normalize range endpoints before expanding
+          const normalizedStart = this.cellHelpers.normalizeCellId(node.start);
+          const normalizedEnd = this.cellHelpers.normalizeCellId(node.end);
           this.cellHelpers
-            .expandRange(node.start, node.end)
+            .expandRange(normalizedStart, normalizedEnd)
             .forEach((id) => dependencies.add(id));
           return;
 

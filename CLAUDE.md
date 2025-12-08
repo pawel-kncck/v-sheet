@@ -213,6 +213,11 @@ The FormulaWorker uses a message-passing protocol:
 
 Always handle worker responses asynchronously.
 
+### Absolute References
+- `$` prefix locks column/row during copy-paste
+- F4 cycles: A1 → $A$1 → A$1 → $A1 → A1
+- FormulaAdjuster utility handles paste adjustments
+
 ## File API Endpoints
 
 | Method | Endpoint | Description |

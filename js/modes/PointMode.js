@@ -26,6 +26,7 @@
 import { NavigationMode } from './NavigationMode.js';
 import { INTENTS } from './Intents.js';
 import { Logger } from '../engine/utils/Logger.js';
+import { FormulaAdjuster } from '../engine/utils/FormulaAdjuster.js';
 
 /**
  * Point mode for formula building.
@@ -141,6 +142,9 @@ export class PointMode extends NavigationMode {
       case INTENTS.EDIT_START:
         // F2 switches to edit mode
         return this._handleSwitchToEdit();
+
+      case INTENTS.TOGGLE_REFERENCE:
+        return this._handleToggleReference();
 
       default:
         // Delegate to NavigationMode parent for other intents
@@ -382,5 +386,62 @@ _handleInput(context) {
     this._editorManager.setValue(this._baseFormula + reference);
 
     Logger.log(this.getName(), `Updated formula with reference: ${reference}`);
+  }
+
+  /**
+   * Handles TOGGLE_REFERENCE intent (F4 key).
+   * Cycles the reference format at the end of the formula.
+   *
+   * @private
+   * @returns {boolean} True if handled
+   */
+  _handleToggleReference() {
+    if (!this._editorManager) return false;
+
+    const formula = this._editorManager.getValue();
+    const cursorPos = this._editorManager.getCursorPosition();
+
+    // Find the reference at or before cursor
+    const { ref, start, end } = this._findReferenceAtCursor(formula, cursorPos);
+    if (!ref) return false;
+
+    // Cycle the reference format
+    const newRef = FormulaAdjuster.cycleReferenceFormat(ref);
+
+    // Replace in formula
+    const newFormula = formula.substring(0, start) + newRef + formula.substring(end);
+    this._editorManager.setValue(newFormula);
+
+    // Update base formula for subsequent navigation
+    this._baseFormula = newFormula.substring(0, start + newRef.length);
+
+    Logger.log(this.getName(), `Cycled reference: ${ref} → ${newRef}`);
+    return true;
+  }
+
+  /**
+   * Finds a cell reference at or before the cursor position.
+   *
+   * @private
+   * @param {string} formula - The formula string
+   * @param {number} cursorPos - Current cursor position
+   * @returns {{ ref: string|null, start: number, end: number }}
+   */
+  _findReferenceAtCursor(formula, cursorPos) {
+    // Use regex to find all cell references with their positions
+    const refRegex = /\$?[A-Z]+\$?[0-9]+/gi;
+    let match;
+
+    while ((match = refRegex.exec(formula)) !== null) {
+      const start = match.index;
+      const end = start + match[0].length;
+
+      // Check if cursor is within or at end of this reference
+      if (cursorPos >= start && cursorPos <= end) {
+        return { ref: match[0], start, end };
+      }
+    }
+
+    return { ref: null, start: -1, end: -1 };
   }
 }

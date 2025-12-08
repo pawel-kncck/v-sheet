@@ -4,7 +4,7 @@ Here is the PRD for Epic 4: Advanced Copy/Paste.
 
 # PRD: Epic 4: Advanced Copy/Paste
 
-  * **Status:** Draft
+  * **Status:** In Progress
   * **Date:** November 15, 2025
   * **Author:** v-sheet Team
   * **Depends On:** Epic 1 (History Management), Epic 2 (Testing & Logging), Epic 3 (Cell Formatting)
@@ -109,10 +109,13 @@ This document outlines the requirements for implementing an "Advanced Copy/Paste
       * Generate a tab-delimited string and write to `navigator.clipboard`.
       * Apply the `.copy-source` CSS class.
 2.  **Phase 2: The "Formula Adjuster" Utility**
-      * Create a new utility class or function (e.g., `FormulaAdjuster.js`).
-      * Its main function will be `adjustFormula(formulaString, sourceCoords, destCoords)`.
+      * Create a new utility class `FormulaAdjuster.js` in `js/engine/utils/`.
+      * Implement `adjustFormula(formula, rowOffset, colOffset)` - adjusts all cell references by the given offset while respecting absolute ($) markers.
+      * Implement `cycleReferenceFormat(ref)` - cycles through reference formats (A1 → $A$1 → A$1 → $A1 → A1) for F4 key support.
       * This function will use the `Tokenizer` to get tokens.
       * It will loop through tokens, and for `CELL_REF` types, it will use `CellHelpers.js` to parse, adjust, and rebuild the reference.
+      * Update `CellHelpers.js` to add `buildCellRef(row, col, colAbs, rowAbs)` method for building references with absolute markers.
+      * Update `CellHelpers.resolveRelativeRef()` to preserve absolute markers when adjusting references.
       * Write extensive unit tests for this utility.
 3.  **Phase 3: `_handlePaste` Implementation**
       * Refactor `_handlePaste` in `spreadsheet.js`.

@@ -586,13 +586,16 @@ class FileManager {
       !this.currentFile.data ||
       !this.currentFile.data.cells
     ) {
+      console.log('[FileManager] getRawCellValue(' + cellId + '): no data, returning empty');
       return '';
     }
     const cellInfo = this.currentFile.data.cells[cellId];
 
     // cellInfo.value holds the raw string we saved
     // <--- UPDATED: Safety check for undefined (in case cell only has style)
-    return (cellInfo && cellInfo.value !== undefined) ? cellInfo.value : '';
+    const result = (cellInfo && cellInfo.value !== undefined) ? cellInfo.value : '';
+    console.log('[FileManager] getRawCellValue(' + cellId + '):', result);
+    return result;
   }
 
   /**

@@ -690,6 +690,187 @@ test('Paste formula with relative reference adjustment', async ({ page }) => {
 
 ---
 
+### Scenario 17.1: Paste Formula with Absolute Reference ($A$1 unchanged)
+
+**Given** A1=10, A2=30, A3 contains formula "=$A$1+$A$2"
+**When** user copies A3 and pastes to B3
+**Then**
+- B3 contains formula "=$A$1+$A$2" (absolute references unchanged)
+- B3 displays "40" (A1+A2 = 10+30)
+
+**Playwright Implementation**:
+```javascript
+test('Paste formula with absolute reference unchanged', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  // Set up source cells
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('10');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('30');
+  await page.keyboard.press('Enter');
+
+  // Create formula with absolute references
+  await page.keyboard.type('=$A$1+$A$2');
+  await page.keyboard.press('Enter');
+
+  // Verify A3 shows 40
+  await expect(page.locator('[data-cell="A3"]')).toHaveText('40');
+
+  // Copy A3
+  await page.locator('[data-cell="A3"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Paste to B3
+  await page.locator('[data-cell="B3"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // B3 should still show 40 (references didn't adjust)
+  await expect(page.locator('[data-cell="B3"]')).toHaveText('40');
+});
+```
+
+---
+
+### Scenario 17.2: Paste Formula with Column-Absolute ($A1 keeps column, adjusts row)
+
+**Given** cell A3 contains formula "=$A1"
+**When** user copies A3 and pastes to B4 (1 row down, 1 column right)
+**Then**
+- B4 contains formula "=$A2" (column A locked, row adjusted)
+
+**Playwright Implementation**:
+```javascript
+test('Paste formula with column-absolute reference', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('100');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('200');
+  await page.keyboard.press('Enter');
+
+  // Create formula with column-absolute reference
+  await page.keyboard.type('=$A1');
+  await page.keyboard.press('Enter');
+
+  await expect(page.locator('[data-cell="A3"]')).toHaveText('100');
+
+  // Copy A3
+  await page.locator('[data-cell="A3"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Paste to B4
+  await page.locator('[data-cell="B4"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // B4 should reference A2 (column locked, row adjusted)
+  await expect(page.locator('[data-cell="B4"]')).toHaveText('200');
+});
+```
+
+---
+
+### Scenario 17.3: Paste Formula with Row-Absolute (A$1 keeps row, adjusts column)
+
+**Given** cell A3 contains formula "=A$1"
+**When** user copies A3 and pastes to B4 (1 row down, 1 column right)
+**Then**
+- B4 contains formula "=B$1" (row 1 locked, column adjusted)
+
+**Playwright Implementation**:
+```javascript
+test('Paste formula with row-absolute reference', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('10');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+
+  await page.locator('[data-cell="A3"]').click();
+  await page.keyboard.type('=A$1');
+  await page.keyboard.press('Enter');
+
+  await expect(page.locator('[data-cell="A3"]')).toHaveText('10');
+
+  // Copy A3
+  await page.locator('[data-cell="A3"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Paste to B4
+  await page.locator('[data-cell="B4"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // B4 should reference B1 (row locked, column adjusted)
+  await expect(page.locator('[data-cell="B4"]')).toHaveText('20');
+});
+```
+
+---
+
+### Scenario 17.4: Paste Formula with Mixed References
+
+**Given** cell A3 contains formula "=$A$1+B2"
+**When** user copies A3 and pastes to B4 (1 row down, 1 column right)
+**Then**
+- B4 contains formula "=$A$1+C3" (absolute part unchanged, relative part adjusted)
+
+**Playwright Implementation**:
+```javascript
+test('Paste formula with mixed references', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('10');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Tab');
+  await page.keyboard.type('20');
+  await page.keyboard.press('Enter');
+
+  await page.locator('[data-cell="A3"]').click();
+  await page.keyboard.type('=$A$1+B2');
+  await page.keyboard.press('Enter');
+
+  await expect(page.locator('[data-cell="A3"]')).toHaveText('30');
+
+  // Copy A3
+  await page.locator('[data-cell="A3"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+C' : 'Control+C'
+  );
+
+  // Set up C3 for testing
+  await page.locator('[data-cell="C3"]').click();
+  await page.keyboard.type('50');
+  await page.keyboard.press('Enter');
+
+  // Paste to B4
+  await page.locator('[data-cell="B4"]').click();
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+V' : 'Control+V'
+  );
+
+  // B4 should show 60 (A1=10 + C3=50)
+  await expect(page.locator('[data-cell="B4"]')).toHaveText('60');
+});
+```
+
+---
+
 ### Scenario 18: Paste Styles Along with Values
 
 **Given** user has copied cell B2 with bold text and background color
@@ -1225,7 +1406,8 @@ These 27 scenarios provide comprehensive coverage of:
 
 **Medium Priority** (Extended Features):
 - Scenarios 7-11 (Keyboard selection)
-- Scenarios 17-18 (Formula and style paste)
+- Scenarios 17-17.4 (Formula paste with absolute/relative references)
+- Scenario 18 (Style paste)
 - Scenarios 20-21 (Cut operations)
 
 **Low Priority** (Edge Cases):

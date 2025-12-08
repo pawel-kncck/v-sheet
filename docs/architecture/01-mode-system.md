@@ -170,6 +170,7 @@ const alt = event.altKey;
 - `COPY`, `PASTE`, `CUT` - Clipboard operations
 - `UNDO`, `REDO` - History operations
 - `DELETE` - Delete/Backspace key
+- `TOGGLE_REFERENCE` - F4 key (cycle absolute/relative references)
 
 See `/docs/api-reference/intent-vocabulary.md` for complete reference.
 
@@ -317,6 +318,7 @@ handleIntent(intent, context) {
 - `COMMIT` - Enter/Tab saves and exits
 - `CANCEL` - Escape discards changes
 - `NAVIGATE` - Returns `false` → browser handles text cursor movement
+- `TOGGLE_REFERENCE` - F4 cycles reference at cursor position
 
 **Mode Transitions FROM Edit**:
 - Enter/Tab → ReadyMode (commit)
@@ -354,6 +356,7 @@ handleIntent(intent, context) {
 - `COMMIT` - Enter/Tab saves formula
 - `CANCEL` - Escape discards formula
 - `EDIT_START` - F2 switches to EditMode
+- `TOGGLE_REFERENCE` - F4 cycles reference format (A1 → $A$1 → A$1 → $A1)
 
 **Mode Transitions FROM Point**:
 - Enter/Tab → ReadyMode (commit formula)

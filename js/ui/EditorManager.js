@@ -168,4 +168,22 @@ export class EditorManager {
   isVisible() {
     return this.isEditing;
   }
+
+  /**
+   * Gets the current cursor position in the editor.
+   * @returns {number}
+   */
+  getCursorPosition() {
+    return this.cellEditor ? this.cellEditor.selectionStart : 0;
+  }
+
+  /**
+   * Sets the cursor position in the editor.
+   * @param {number} position
+   */
+  setCursorPosition(position) {
+    if (this.cellEditor) {
+      this.cellEditor.setSelectionRange(position, position);
+    }
+  }
 }

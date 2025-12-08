@@ -820,6 +820,118 @@ test('MIN and MAX functions work correctly', async ({ page }) => {
 
 ---
 
+## Scenario Group: Absolute References (F4 Toggle)
+
+### Scenario 10.1: F4 cycles A1 → $A$1 in PointMode
+
+**Given** user is in PointMode building formula "=A1"
+**When** user presses F4
+**Then**:
+- Formula changes to "=$A$1"
+- Reference remains highlighted
+- Mode stays in PointMode
+
+**Implementation**:
+```javascript
+test('F4 cycles A1 → $A$1 in PointMode', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('=A1');
+  await page.keyboard.press('F4');
+
+  const editor = page.locator('.cell-editor');
+  await expect(editor).toHaveValue('=$A$1');
+});
+```
+
+---
+
+### Scenario 10.2: F4 completes full cycle $A$1 → A$1 → $A1 → A1
+
+**Given** user has formula "=$A$1" in PointMode
+**When** user presses F4 three more times
+**Then**:
+- First press: "=A$1" (row absolute)
+- Second press: "=$A1" (column absolute)
+- Third press: "=A1" (relative)
+
+**Implementation**:
+```javascript
+test('F4 completes full cycle', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.type('=$A$1');
+
+  await page.keyboard.press('F4');
+  await expect(page.locator('.cell-editor')).toHaveValue('=A$1');
+
+  await page.keyboard.press('F4');
+  await expect(page.locator('.cell-editor')).toHaveValue('=$A1');
+
+  await page.keyboard.press('F4');
+  await expect(page.locator('.cell-editor')).toHaveValue('=A1');
+});
+```
+
+---
+
+### Scenario 10.3: F4 in EditMode cycles reference at cursor
+
+**Given** user is editing formula "=A1+B2" with cursor after A1
+**When** user presses F4
+**Then**:
+- Formula changes to "=$A$1+B2"
+- Only A1 is affected (cursor position matters)
+- Mode stays in EditMode
+
+**Implementation**:
+```javascript
+test('F4 in EditMode cycles reference at cursor position', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  await page.locator('[data-cell="A1"]').click();
+  await page.keyboard.press('F2');
+  await page.keyboard.type('=A1+B2');
+
+  // Move cursor to position after A1
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press('ArrowLeft');
+  }
+
+  await page.keyboard.press('F4');
+
+  const editor = page.locator('.cell-editor');
+  await expect(editor).toHaveValue('=$A$1+B2');
+});
+```
+
+---
+
+### Scenario 10.4: F4 with range reference
+
+**Given** user has formula "=SUM(A1:B2)" in PointMode
+**When** user presses F4
+**Then**:
+- Both parts of range are cycled: "=SUM($A$1:$B$2)"
+
+**Implementation**:
+```javascript
+test('F4 cycles range references', async ({ page }) => {
+  await page.goto('http://localhost:5000');
+
+  await page.locator('[data-cell="C1"]').click();
+  await page.keyboard.type('=SUM(A1:B2)');
+  await page.keyboard.press('F4');
+
+  const editor = page.locator('.cell-editor');
+  await expect(editor).toHaveValue('=SUM($A$1:$B$2)');
+});
+```
+
+---
+
 ## Summary: Test Coverage
 
 This file covers:
@@ -833,8 +945,9 @@ This file covers:
 - ✅ Escape cancellation
 - ✅ Reference highlighting (visual feedback)
 - ✅ Advanced functions (AVERAGE, IF, MIN, MAX)
+- ✅ Absolute references (F4 toggle, cycling formats)
 
-**Total Scenarios**: 28 test scenarios
+**Total Scenarios**: 32 test scenarios
 
 ---
 

@@ -51,6 +51,9 @@ export const INTENTS = Object.freeze({
   // Formatting
   FORMAT_BOLD: 'FORMAT_BOLD',
   FORMAT_ITALIC: 'FORMAT_ITALIC',
+
+  // Formula Editing
+  TOGGLE_REFERENCE: 'TOGGLE_REFERENCE',
 });
 
 /**

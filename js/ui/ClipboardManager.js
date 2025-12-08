@@ -1,4 +1,5 @@
 import { Logger } from '../engine/utils/Logger.js';
+import { FormulaAdjuster } from '../engine/utils/FormulaAdjuster.js';
 
 export class ClipboardManager {
   /**
@@ -28,6 +29,8 @@ export class ClipboardManager {
       ranges = this.selectionManager.ranges;
     }
 
+    console.log('[ClipboardManager] copy() called, ranges:', JSON.stringify(ranges));
+
     if (!ranges || ranges.length === 0) return;
 
     const primaryRange = ranges[ranges.length - 1];
@@ -38,6 +41,8 @@ export class ClipboardManager {
     const minCol = Math.min(start.col, end.col);
     const maxCol = Math.max(start.col, end.col);
 
+    console.log('[ClipboardManager] Range: minRow=', minRow, 'maxRow=', maxRow, 'minCol=', minCol, 'maxCol=', maxCol);
+
     const copiedData = [];
     const cellsForSystemClipboard = [];
 
@@ -45,10 +50,12 @@ export class ClipboardManager {
       const rowData = [];
       for (let c = minCol; c <= maxCol; c++) {
         const cellId = this._coordsToCellId(r, c);
-        
+
         // UPDATED: Get both Value and resolved Style Object
-        const cellData = this.dataGetter(cellId); 
-        
+        const cellData = this.dataGetter(cellId);
+
+        console.log('[ClipboardManager] Getting data for', cellId, ':', cellData.value);
+
         copiedData.push({
           originalCellId: cellId,
           value: cellData.value,
@@ -81,6 +88,15 @@ export class ClipboardManager {
     const updates = [];
     const { row: targetRow, col: targetCol } = targetCell;
 
+    // Calculate offsets from source to destination
+    const sourceRow = this.clipboard.sourceRange.minRow;
+    const sourceCol = this.clipboard.sourceRange.minCol;
+    const rowOffset = targetRow - sourceRow;
+    const colOffset = targetCol - sourceCol;
+
+    console.log('[ClipboardManager] paste() target:', targetCell, 'offsets:', rowOffset, colOffset);
+    console.log('[ClipboardManager] clipboard.data:', JSON.stringify(this.clipboard.data));
+
     this.clipboard.data.forEach(item => {
       const destRow = targetRow + item.relativePos.row;
       const destCol = targetCol + item.relativePos.col;
@@ -90,9 +106,16 @@ export class ClipboardManager {
 
       const destCellId = this._coordsToCellId(destRow, destCol);
 
+      let value = item.value;
+
+      // Adjust formula references if this is a formula
+      if (typeof value === 'string' && value.startsWith('=')) {
+        value = FormulaAdjuster.adjustFormula(value, rowOffset, colOffset);
+      }
+
       updates.push({
         cellId: destCellId,
-        value: item.value,
+        value: value,
         style: item.style // <--- Pass style along
       });
     });

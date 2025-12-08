@@ -147,6 +147,12 @@ EditMode provides fine-grained text editing control. Activates via F2, double-cl
 | **Shift+Tab** | Commit and Move Left | Saves changes and moves selection left |
 | **Escape** | Cancel Edit | Discards changes, returns to ReadyMode |
 
+### Formula Editing
+
+| Shortcut | Action | Description |
+|----------|--------|-------------|
+| **F4** | Toggle Absolute Reference | Cycles reference format at cursor (A1 → $A$1 → A$1 → $A1) |
+
 **Key Feature**: Arrow keys move the **text cursor**, not cell selection. This enables precise editing control.
 
 ---
@@ -166,6 +172,7 @@ PointMode activates when you start a formula (type `=`, `+`, or `-`). Enables vi
 | **Cmd+Shift+Arrow** | Range to Edge | Creates range to edge of data |
 | **Shift+Click** | Range Select | Creates range from last reference to clicked cell |
 | **Drag Selection** | Create Range | Creates range reference by dragging |
+| **F4** | Toggle Absolute Reference | Cycles reference format (A1 → $A$1 → A$1 → $A1) |
 
 ### Formula Editing
 
@@ -352,7 +359,6 @@ The following are common spreadsheet shortcuts that may be added in future versi
 | **Cmd+;** | Insert Date | Not planned |
 | **Cmd+:** | Insert Time | Not planned |
 | **Cmd+K** | Insert Link | Not planned |
-| **F4** | Toggle absolute/relative reference | Planned (Epic 7) |
 
 ---
 
