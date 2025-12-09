@@ -8,9 +8,10 @@
 import { INTENTS, createEditStartContext } from './modes/Intents.js';
 
 class FormulaBar {
-  constructor(fileManager, spreadsheet) {
+  constructor(fileManager, spreadsheet, formulaHighlighter = null) {
     this.fileManager = fileManager;
     this.spreadsheet = spreadsheet;
+    this.formulaHighlighter = formulaHighlighter;
 
     // UI Elements
     this.elements = {
@@ -36,6 +37,14 @@ class FormulaBar {
 
     // Initialize
     this.init();
+  }
+
+  /**
+   * Set the formula highlighter reference
+   * @param {FormulaHighlighter} formulaHighlighter
+   */
+  setFormulaHighlighter(formulaHighlighter) {
+    this.formulaHighlighter = formulaHighlighter;
   }
 
   /**
@@ -240,7 +249,7 @@ class FormulaBar {
 
           if (file.id !== currentId) {
             await this.fileManager.loadFile(file.id);
-            
+
             // Load the spreadsheet data
             if (this.spreadsheet && this.spreadsheet.loadFromFile) {
               this.spreadsheet.loadFromFile(
@@ -366,12 +375,20 @@ class FormulaBar {
         }
       }
     } finally {
-      // Always close dropdown and focus grid
+      // Always close dropdown
       this.closeFileDropdown();
 
-      // Focus the grid container
-      if (this.spreadsheet && this.spreadsheet.renderer && this.spreadsheet.renderer.cellGridContainer) {
-        this.spreadsheet.renderer.cellGridContainer.focus();
+      // For new files, ensure we're in ready mode and focused on A1
+      if (this.spreadsheet && this.spreadsheet.modeManager) {
+        // Small delay to ensure file load completes
+        setTimeout(() => {
+          if (this.spreadsheet.modeManager) {
+            this.spreadsheet.modeManager.switchMode('ready');
+          }
+          if (this.spreadsheet.renderer && this.spreadsheet.renderer.cellGridContainer) {
+            this.spreadsheet.renderer.cellGridContainer.focus();
+          }
+        }, 0);
       }
     }
   }
@@ -421,6 +438,11 @@ class FormulaBar {
   updateFormulaInput(value) {
     if (!this.isEditingFormula) {
       this.elements.formulaInput.value = value || '';
+
+      // Update formula bar highlighting (works in all modes, not just editing)
+      if (this.formulaHighlighter) {
+        this.formulaHighlighter._drawFormulaBarOverlay();
+      }
     }
   }
 
@@ -464,6 +486,11 @@ class FormulaBar {
       if (this.spreadsheet.editor.isEditing) {
         this.spreadsheet.editor.setValue(value);
       }
+    }
+
+    // Update formula bar highlighting
+    if (this.formulaHighlighter) {
+      this.formulaHighlighter._drawFormulaBarOverlay();
     }
   }
 

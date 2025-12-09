@@ -131,14 +131,22 @@ export class StatusBar {
    * @returns {string} Formatted range string (e.g., "A1" or "A1:B5")
    */
   _formatRange(range) {
-    const { start, end } = range;
+    let { start, end } = range;
 
     // Check if it's a single cell
     if (start.row === end.row && start.col === end.col) {
       return this._coordsToCellId(start);
     }
 
-    // It's a range
+    // It's a range - normalize to ensure start <= end
+    const minRow = Math.min(start.row, end.row);
+    const maxRow = Math.max(start.row, end.row);
+    const minCol = Math.min(start.col, end.col);
+    const maxCol = Math.max(start.col, end.col);
+
+    start = { row: minRow, col: minCol };
+    end = { row: maxRow, col: maxCol };
+
     const startId = this._coordsToCellId(start);
     const endId = this._coordsToCellId(end);
     return `${startId}:${endId}`;

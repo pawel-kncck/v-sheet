@@ -14,6 +14,7 @@ import { GridResizer } from './ui/GridResizer.js';
 import { EditorManager } from './ui/EditorManager.js';
 import { ClipboardManager } from './ui/ClipboardManager.js';
 import { InputController } from './ui/InputController.js';
+import { FormulaHighlighter } from './ui/FormulaHighlighter.js';
 
 // Mode System
 import { ModeManager } from './modes/ModeManager.js';
@@ -44,7 +45,8 @@ export class Spreadsheet {
     this.renderer = new GridRenderer(container, this.config);
     this.selectionManager = new SelectionManager(this.renderer, this.config);
     this.resizer = new GridResizer();
-    this.editor = new EditorManager(this.renderer);
+    this.formulaHighlighter = new FormulaHighlighter(this.renderer, this.selectionManager);
+    this.editor = new EditorManager(this.renderer, this.formulaHighlighter);
     
     // Return both Value and Style for Copy operations
     this.clipboardManager = new ClipboardManager(this.renderer, (cellId) => {
@@ -125,6 +127,11 @@ export class Spreadsheet {
 
   setFormulaBar(formulaBar) {
     this.formulaBar = formulaBar;
+
+    // Pass the formula highlighter to the formula bar
+    if (this.formulaHighlighter && formulaBar.setFormulaHighlighter) {
+      formulaBar.setFormulaHighlighter(this.formulaHighlighter);
+    }
 
     // Wire up editor value change callback to sync with formula bar
     if (this.editor) {

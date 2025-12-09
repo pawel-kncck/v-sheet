@@ -42,11 +42,21 @@ class FormulaAdjuster {
   /**
    * Cycles a cell reference through absolute formats.
    * A1 → $A$1 → A$1 → $A1 → A1
+   * Also handles range references: B1:B3 → $B$1:$B$3 → B$1:B$3 → $B1:$B3 → B1:B3
    *
-   * @param {string} ref - Cell reference string
+   * @param {string} ref - Cell reference string (single cell or range)
    * @returns {string} Next format in cycle
    */
   static cycleReferenceFormat(ref) {
+    // Check if this is a range reference
+    if (ref.includes(':')) {
+      const [start, end] = ref.split(':');
+      const cycledStart = this.cycleReferenceFormat(start);
+      const cycledEnd = this.cycleReferenceFormat(end);
+      return `${cycledStart}:${cycledEnd}`;
+    }
+
+    // Single cell reference
     const parsed = CellHelpers.parseCellRef(ref);
     if (!parsed) return ref;
 

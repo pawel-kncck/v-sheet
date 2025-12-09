@@ -32,13 +32,11 @@ test.describe('Formula Bar Sync Issues', () => {
     // This is where the bug occurs: cell editor goes blank
     await expect(cellEditor).toHaveValue('=S');
     await expect(formulaBar).toHaveValue('=S');
-    // Verify the editor is still visible and has text displayed
+    // Verify the editor is still visible
     await expect(cellEditor).toBeVisible();
-    const editorColor = await cellEditor.evaluate(el => window.getComputedStyle(el).color);
-    console.log('Cell editor color after typing "S":', editorColor);
-    // Ensure the text color is not transparent
-    expect(editorColor).not.toBe('rgba(0, 0, 0, 0)');
-    expect(editorColor).not.toBe('transparent');
+    // When formula highlighting is active, editor text is transparent and colored overlay shows
+    const textOverlay = page.locator('#formula-text-overlay');
+    await expect(textOverlay).toBeVisible();
 
     // Type "U"
     await page.keyboard.type('U');

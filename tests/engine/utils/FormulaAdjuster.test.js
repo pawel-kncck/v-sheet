@@ -105,5 +105,40 @@ describe('FormulaAdjuster', () => {
       ref = FormulaAdjuster.cycleReferenceFormat(ref); // → B5
       expect(ref).toBe('B5');
     });
+
+    // Range reference cycling tests
+    it('cycles range B1:B3 → $B$1:$B$3', () => {
+      expect(FormulaAdjuster.cycleReferenceFormat('B1:B3')).toBe('$B$1:$B$3');
+    });
+
+    it('cycles range $B$1:$B$3 → B$1:B$3', () => {
+      expect(FormulaAdjuster.cycleReferenceFormat('$B$1:$B$3')).toBe('B$1:B$3');
+    });
+
+    it('cycles range B$1:B$3 → $B1:$B3', () => {
+      expect(FormulaAdjuster.cycleReferenceFormat('B$1:B$3')).toBe('$B1:$B3');
+    });
+
+    it('cycles range $B1:$B3 → B1:B3', () => {
+      expect(FormulaAdjuster.cycleReferenceFormat('$B1:$B3')).toBe('B1:B3');
+    });
+
+    it('completes full cycle for range', () => {
+      let ref = 'A1:C3';
+      ref = FormulaAdjuster.cycleReferenceFormat(ref); // → $A$1:$C$3
+      expect(ref).toBe('$A$1:$C$3');
+      ref = FormulaAdjuster.cycleReferenceFormat(ref); // → A$1:C$3
+      expect(ref).toBe('A$1:C$3');
+      ref = FormulaAdjuster.cycleReferenceFormat(ref); // → $A1:$C3
+      expect(ref).toBe('$A1:$C3');
+      ref = FormulaAdjuster.cycleReferenceFormat(ref); // → A1:C3
+      expect(ref).toBe('A1:C3');
+    });
+
+    it('cycles each part of range independently', () => {
+      // When a range has mixed formats, each part cycles independently
+      // $A1 → A1 and B$2 → $B2
+      expect(FormulaAdjuster.cycleReferenceFormat('$A1:B$2')).toBe('A1:$B2');
+    });
   });
 });

@@ -16,10 +16,12 @@ import { Logger } from '../engine/utils/Logger.js';
 export class EditorManager {
   /**
    * @param {GridRenderer} gridRenderer
+   * @param {FormulaHighlighter} formulaHighlighter - Optional highlighter for formula visual feedback
    */
-  constructor(gridRenderer) {
+  constructor(gridRenderer, formulaHighlighter = null) {
     this.renderer = gridRenderer;
     this.cellEditor = document.getElementById('cell-editor');
+    this.formulaHighlighter = formulaHighlighter;
 
     if (!this.cellEditor) {
       Logger.error('EditorManager', 'Cell editor input (#cell-editor) not found');
@@ -32,16 +34,80 @@ export class EditorManager {
     // Callback for value changes (for formula bar sync)
     this.onValueChange = null;
 
-    // Add input listener for value synchronization
+    // Add input listener for value synchronization and auto-resize
     if (this.cellEditor) {
       this.cellEditor.addEventListener('input', () => {
         if (this.onValueChange) {
           this.onValueChange(this.cellEditor.value);
         }
+        // Auto-resize editor as content grows
+        this._resizeEditor();
+
+        // Update formula highlighting if active
+        if (this.formulaHighlighter) {
+          const value = this.cellEditor.value;
+          if (value.startsWith('=')) {
+            this.formulaHighlighter.update(value);
+          }
+        }
       });
+
+      // Track cursor position for hover effects
+      this.cellEditor.addEventListener('click', () => this._updateCursorHighlight());
+      this.cellEditor.addEventListener('keyup', () => this._updateCursorHighlight());
+      this.cellEditor.addEventListener('select', () => this._updateCursorHighlight());
     }
 
     Logger.log('EditorManager', 'Initialized (Mode-based)');
+  }
+
+  /**
+   * Updates formula highlighting based on cursor position
+   * @private
+   */
+  _updateCursorHighlight() {
+    if (this.formulaHighlighter && this.cellEditor) {
+      const cursorPos = this.cellEditor.selectionStart;
+      this.formulaHighlighter.updateCursorPosition(cursorPos);
+    }
+  }
+
+  /**
+   * Dynamically resizes the editor based on its content.
+   * The editor starts at the cell width but can expand rightward for long formulas.
+   * @private
+   */
+  _resizeEditor() {
+    if (!this.cellEditor || !this.isEditing) return;
+
+    // Use a hidden span to measure text width with exact same styling
+    const span = document.createElement('span');
+    span.style.visibility = 'hidden';
+    span.style.position = 'absolute';
+    span.style.whiteSpace = 'nowrap';
+    span.style.fontFamily = this.cellEditor.style.fontFamily || 'Arial';
+    span.style.fontSize = this.cellEditor.style.fontSize || '13px';
+    span.style.fontWeight = this.cellEditor.style.fontWeight || 'normal';
+    span.style.fontStyle = this.cellEditor.style.fontStyle || 'normal';
+    span.style.letterSpacing = this.cellEditor.style.letterSpacing || 'normal';
+    span.textContent = this.cellEditor.value || ' '; // Use space as minimum
+
+    document.body.appendChild(span);
+    const textWidth = span.offsetWidth;
+    document.body.removeChild(span);
+
+    // Add padding to account for input padding (4px left + 4px right) and borders (2px * 2) and comfort space
+    const inputPadding = 8; // 4px left + 4px right
+    const borderWidth = 4; // 2px border on each side
+    const comfortSpace = 10; // Extra breathing room
+    const totalPadding = inputPadding + borderWidth + comfortSpace;
+
+    const minWidth = parseFloat(this.cellEditor.style.minWidth) || 100;
+    const calculatedWidth = Math.max(minWidth, textWidth + totalPadding);
+
+    this.cellEditor.style.width = `${calculatedWidth}px`;
+
+    Logger.log('EditorManager', `Resized editor: text=${textWidth}px, total=${calculatedWidth}px`);
   }
 
   /**
@@ -67,7 +133,9 @@ export class EditorManager {
 
     this.cellEditor.style.left = `${cellElement.offsetLeft - scrollLeft}px`;
     this.cellEditor.style.top = `${cellElement.offsetTop - scrollTop}px`;
-    this.cellEditor.style.width = `${cellRect.width}px`;
+    // Set minimum width to cell width, but allow expansion for long formulas
+    this.cellEditor.style.minWidth = `${cellRect.width}px`;
+    this.cellEditor.style.width = `${cellRect.width}px`; // Initial width = cell width
     this.cellEditor.style.height = `${cellRect.height}px`;
     this.cellEditor.style.display = 'block';
 
@@ -87,7 +155,8 @@ export class EditorManager {
     }
 
     this.cellEditor.style.textAlign = computedStyle.textAlign;
-    this.cellEditor.style.backgroundColor = computedStyle.backgroundColor;
+    // Always use white background for clean, floating appearance
+    this.cellEditor.style.backgroundColor = '#ffffff';
 
     // 2. Set Value
     this.cellEditor.value = triggerKey ? triggerKey : initialValue;
@@ -97,7 +166,18 @@ export class EditorManager {
       this.onValueChange(this.cellEditor.value);
     }
 
-    // 3. Visuals
+    // 3. Resize editor to fit initial content
+    this._resizeEditor();
+
+    // 4. Activate formula highlighting if this is a formula
+    if (this.formulaHighlighter && this.cellEditor.value.startsWith('=')) {
+      this.formulaHighlighter.activate(this.cellEditor.value);
+      // Make editor text transparent so colored overlay shows through
+      this.cellEditor.style.color = 'transparent';
+      this.cellEditor.style.caretColor = '#000000'; // Keep caret visible
+    }
+
+    // 5. Visuals
     cellElement.classList.add('editing');
 
     // Handle cursor position based on edit mode
@@ -133,14 +213,22 @@ export class EditorManager {
     this.cellEditor.style.display = 'none';
     this.cellEditor.value = '';
 
+    // Deactivate formula highlighting
+    if (this.formulaHighlighter) {
+      this.formulaHighlighter.deactivate();
+    }
+
     // Reset styles to avoid leaking to next edit
     this.cellEditor.style.fontFamily = '';
     this.cellEditor.style.fontSize = '';
     this.cellEditor.style.fontWeight = '';
     this.cellEditor.style.fontStyle = '';
     this.cellEditor.style.color = '';
+    this.cellEditor.style.caretColor = '';
     this.cellEditor.style.textAlign = '';
     this.cellEditor.style.backgroundColor = '';
+    this.cellEditor.style.width = '';
+    this.cellEditor.style.minWidth = '';
 
     this.renderer.cellGridContainer.focus();
 
@@ -174,6 +262,20 @@ export class EditorManager {
       // Trigger the onValueChange callback to sync with formula bar
       if (this.onValueChange) {
         this.onValueChange(value);
+      }
+      // Resize editor to fit new content (important for programmatic updates in PointMode)
+      this._resizeEditor();
+
+      // Update formula highlighting if active
+      if (this.formulaHighlighter && value.startsWith('=')) {
+        this.formulaHighlighter.update(value);
+        // Make editor text transparent so colored overlay shows through
+        this.cellEditor.style.color = 'transparent';
+        this.cellEditor.style.caretColor = '#000000';
+      } else if (this.formulaHighlighter) {
+        // Not a formula - restore normal text color
+        this.cellEditor.style.color = '';
+        this.cellEditor.style.caretColor = '';
       }
     }
   }

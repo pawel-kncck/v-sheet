@@ -64,6 +64,60 @@ test.describe('Absolute References - F4 Toggle', () => {
     const editor = page.locator('#cell-editor');
     await expect(editor).toHaveValue('=$A$1+B2');
   });
+
+  test('F4 cycles range reference B1:B3 → $B$1:$B$3 in PointMode', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse('**/api/recent');
+
+    // Given: User types formula with range reference directly
+    await page.locator('[data-id="A1"]').click();
+    await page.keyboard.type('=B1:B3');
+
+    // Verify we have the range in the formula
+    const editor = page.locator('#cell-editor');
+    await expect(editor).toHaveValue('=B1:B3');
+
+    // When: User presses F4 (cursor should be at end after typing)
+    await page.keyboard.press('F4');
+
+    // Then: Formula changes to "=$B$1:$B$3" (entire range becomes absolute)
+    await expect(editor).toHaveValue('=$B$1:$B$3');
+
+    // And: Pressing F4 again cycles to next state
+    await page.keyboard.press('F4');
+    await expect(editor).toHaveValue('=B$1:B$3');
+
+    await page.keyboard.press('F4');
+    await expect(editor).toHaveValue('=$B1:$B3');
+
+    await page.keyboard.press('F4');
+    await expect(editor).toHaveValue('=B1:B3');
+  });
+
+  test('F4 cycles range reference in EditMode', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForResponse('**/api/recent');
+
+    // Given: Create formula with range in C1
+    await page.locator('[data-id="C1"]').click();
+    await page.keyboard.type('=SUM(A1:A3)');
+    await page.keyboard.press('Enter');
+
+    // Now edit the formula with F2
+    await page.locator('[data-id="C1"]').click();
+    await page.keyboard.press('F2');
+
+    // Move cursor to be inside the range (after A1:A3)
+    // Formula is "=SUM(A1:A3)", move left 1 to be inside the range
+    await page.keyboard.press('ArrowLeft');
+
+    // When: User presses F4
+    await page.keyboard.press('F4');
+
+    // Then: Range becomes absolute
+    const editor = page.locator('#cell-editor');
+    await expect(editor).toHaveValue('=SUM($A$1:$A$3)');
+  });
 });
 
 test.describe('Absolute References - Copy/Paste', () => {

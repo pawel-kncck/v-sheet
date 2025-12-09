@@ -150,6 +150,11 @@ export class PointMode extends NavigationMode {
       case INTENTS.TOGGLE_REFERENCE:
         return this._handleToggleReference();
 
+      case INTENTS.DELETE:
+        // In PointMode, DELETE (Backspace/Delete) should edit the formula text
+        // Return false to let the browser handle it naturally in the input field
+        return false;
+
       default:
         // Delegate to NavigationMode parent for other intents
         // (Copy, Paste, Undo are disabled in point mode for now)
@@ -402,14 +407,19 @@ _handleInput(context) {
       // Single cell reference
       reference = this._selectionManager.coordsToCellId(start);
     } else {
-      // Range reference
-      const startRef = this._selectionManager.coordsToCellId(start);
-      const endRef = this._selectionManager.coordsToCellId(end);
+      // Range reference - normalize to ensure start <= end
+      const normalizedRange = this._normalizeRange(start, end);
+      const startRef = this._selectionManager.coordsToCellId(normalizedRange.start);
+      const endRef = this._selectionManager.coordsToCellId(normalizedRange.end);
       reference = `${startRef}:${endRef}`;
     }
 
     // UPDATED: Use _baseFormula instead of getValue() to prevent appending loops
-    this._editorManager.setValue(this._baseFormula + reference);
+    const newFormula = this._baseFormula + reference;
+    this._editorManager.setValue(newFormula);
+
+    // Position cursor at the end of the formula
+    this._editorManager.setCursorPosition(newFormula.length);
 
     Logger.log(this.getName(), `Updated formula with reference: ${reference}`);
   }
@@ -447,6 +457,7 @@ _handleInput(context) {
 
   /**
    * Finds a cell reference at or before the cursor position.
+   * Supports both single cell references (A1, $A$1) and range references (B1:B3, $B$1:$B$3).
    *
    * @private
    * @param {string} formula - The formula string
@@ -454,20 +465,51 @@ _handleInput(context) {
    * @returns {{ ref: string|null, start: number, end: number }}
    */
   _findReferenceAtCursor(formula, cursorPos) {
-    // Use regex to find all cell references with their positions
-    const refRegex = /\$?[A-Z]+\$?[0-9]+/gi;
+    // Use regex to find all cell references (including ranges) with their positions
+    // Pattern matches: A1, $A$1, A1:B2, $A$1:$B$2, etc.
+    const refRegex = /\$?[A-Z]+\$?[0-9]+(?::\$?[A-Z]+\$?[0-9]+)?/gi;
     let match;
+    let lastMatchBeforeCursor = null;
 
     while ((match = refRegex.exec(formula)) !== null) {
       const start = match.index;
       const end = start + match[0].length;
 
-      // Check if cursor is within or at end of this reference
+      // Check if cursor is within this reference or immediately after it
       if (cursorPos >= start && cursorPos <= end) {
         return { ref: match[0], start, end };
       }
+
+      // Keep track of the last reference before cursor for fallback
+      if (end < cursorPos) {
+        lastMatchBeforeCursor = { ref: match[0], start, end };
+      }
+    }
+
+    // If cursor is immediately after a reference (common in PointMode), use that reference
+    if (lastMatchBeforeCursor && (cursorPos - lastMatchBeforeCursor.end === 1)) {
+      return lastMatchBeforeCursor;
     }
 
     return { ref: null, start: -1, end: -1 };
+  }
+
+  /**
+   * Normalizes a range to ensure start coordinates are less than or equal to end coordinates.
+   * @private
+   * @param {Object} start - { row, col }
+   * @param {Object} end - { row, col }
+   * @returns {Object} - { start: { row, col }, end: { row, col } }
+   */
+  _normalizeRange(start, end) {
+    const minRow = Math.min(start.row, end.row);
+    const maxRow = Math.max(start.row, end.row);
+    const minCol = Math.min(start.col, end.col);
+    const maxCol = Math.max(start.col, end.col);
+
+    return {
+      start: { row: minRow, col: minCol },
+      end: { row: maxRow, col: maxCol }
+    };
   }
 }

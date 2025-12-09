@@ -322,6 +322,7 @@ export class EditMode extends AbstractMode {
 
   /**
    * Finds a cell reference at or before the cursor position.
+   * Supports both single cell references (A1, $A$1) and range references (B1:B3, $B$1:$B$3).
    *
    * @private
    * @param {string} formula - The formula string
@@ -329,18 +330,30 @@ export class EditMode extends AbstractMode {
    * @returns {{ ref: string|null, start: number, end: number }}
    */
   _findReferenceAtCursor(formula, cursorPos) {
-    // Use regex to find all cell references with their positions
-    const refRegex = /\$?[A-Z]+\$?[0-9]+/gi;
+    // Use regex to find all cell references (including ranges) with their positions
+    // Pattern matches: A1, $A$1, A1:B2, $A$1:$B$2, etc.
+    const refRegex = /\$?[A-Z]+\$?[0-9]+(?::\$?[A-Z]+\$?[0-9]+)?/gi;
     let match;
+    let lastMatchBeforeCursor = null;
 
     while ((match = refRegex.exec(formula)) !== null) {
       const start = match.index;
       const end = start + match[0].length;
 
-      // Check if cursor is within or at end of this reference
+      // Check if cursor is within this reference or immediately after it
       if (cursorPos >= start && cursorPos <= end) {
         return { ref: match[0], start, end };
       }
+
+      // Keep track of the last reference before cursor for fallback
+      if (end < cursorPos) {
+        lastMatchBeforeCursor = { ref: match[0], start, end };
+      }
+    }
+
+    // If cursor is immediately after a reference (common in PointMode), use that reference
+    if (lastMatchBeforeCursor && (cursorPos - lastMatchBeforeCursor.end === 1)) {
+      return lastMatchBeforeCursor;
     }
 
     return { ref: null, start: -1, end: -1 };
