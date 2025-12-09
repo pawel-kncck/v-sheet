@@ -378,12 +378,16 @@ class FormulaBar {
       // Always close dropdown
       this.closeFileDropdown();
 
-      // For new files, ensure we're in ready mode and focused on A1
+      // For new files, ensure we're in ready mode, focused, and A1 is selected
       if (this.spreadsheet && this.spreadsheet.modeManager) {
         // Small delay to ensure file load completes
         setTimeout(() => {
           if (this.spreadsheet.modeManager) {
             this.spreadsheet.modeManager.switchMode('ready');
+          }
+          // Ensure A1 is selected after mode switch
+          if (this.spreadsheet.selectionManager) {
+            this.spreadsheet.selectionManager.selectCell({ row: 1, col: 0 });
           }
           if (this.spreadsheet.renderer && this.spreadsheet.renderer.cellGridContainer) {
             this.spreadsheet.renderer.cellGridContainer.focus();

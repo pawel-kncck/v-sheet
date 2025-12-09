@@ -177,6 +177,10 @@
             );
             fileManager = new FileManager();
 
+            // Expose for debugging and E2E tests
+            window.spreadsheet = spreadsheet;
+            window.fileManager = fileManager;
+
             // Initialize file manager first
             const initialized = await fileManager.initialize();
 

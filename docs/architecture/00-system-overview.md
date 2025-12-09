@@ -284,6 +284,44 @@ v-sheet is built on three core architectural patterns:
 
 ---
 
+#### Toolbar
+**Responsibility**: Formatting controls UI
+
+**What it does**:
+- Provides font controls (family, size, bold, italic)
+- Provides color pickers (text color, fill/background color)
+- Provides alignment buttons (left, center, right)
+- Calls `Spreadsheet.applyRangeFormat()` on user interaction
+
+**What it doesn't do**:
+- ❌ Store formatting state (delegated to StyleManager/FileManager)
+- ❌ Apply styles directly (delegated to FormatRangeCommand)
+
+**Files**: `js/ui/Toolbar.js`
+
+---
+
+### Styling System
+
+#### StyleManager
+**Responsibility**: Flyweight pattern for style deduplication
+
+**What it does**:
+- Maintains central "palette" of unique style objects
+- Provides `addStyle(styleObject)` → returns styleId
+- Provides `getStyle(styleId)` → returns style object
+- Uses hash-based reverse lookup to deduplicate identical styles
+
+**Data it owns**:
+- Style palette: `{ styleId: styleObject, ... }`
+- Reverse lookup map: `hash → styleId`
+
+**Why it exists**: 1000 cells with same style = 1 palette entry, not 1000 copies
+
+**Files**: `js/StyleManager.js`
+
+---
+
 ### History System (Command Pattern)
 
 #### HistoryManager
@@ -311,10 +349,10 @@ v-sheet is built on three core architectural patterns:
 - `undo()` - Revert the action
 
 **Concrete commands**:
-- UpdateCellsCommand - Cell data changes
+- UpdateCellsCommand - Cell data changes (with optional styles)
 - ResizeCommand - Column/row resizing
-- MoveRangeCommand - Drag-to-move cells
-- FormatRangeCommand - Cell formatting (planned)
+- MoveRangeCommand - Drag-to-move cells (preserves styles)
+- FormatRangeCommand - Cell formatting changes
 
 **Files**: `js/history/Command.js`, `js/history/commands/`
 
@@ -564,6 +602,35 @@ User Presses Cmd+Z
 
 ---
 
+### 5. Formatting Flow
+
+```
+User Clicks Toolbar Button (e.g., Bold)
+  → Toolbar.handleBoldClick()
+  → Spreadsheet.applyRangeFormat({ font: { bold: true } }, 'toggle')
+  → Get selected cells from SelectionManager
+  → FormatRangeCommand created with styleChanges
+  → HistoryManager.execute(command)
+  → FormatRangeCommand.execute()
+     → For each cell:
+        → Get existing style from FileManager
+        → Deep merge new changes with existing style
+        → StyleManager.addStyle(mergedStyle) → styleId
+        → FileManager.updateCellFormat(cellId, styleId)
+        → GridRenderer.updateCellStyle(cellId, styleObject)
+  → Autosave triggered (debounced)
+  → FileManager.save() → Flask API (includes styles palette)
+```
+
+**Key Points**:
+- Formatting uses **Flyweight pattern** (styles deduplicated via StyleManager)
+- **Toggle mode** flips on/off based on current cell state
+- **Deep merge** preserves existing styles when adding new ones
+- Styles persist in file data alongside cells
+- **Worker not involved** (styles are presentation-only, not calculated)
+
+---
+
 ## Key Architectural Decisions
 
 ### 1. Why FSM for Modes?
@@ -631,6 +698,22 @@ See: `/docs/adr/003-command-pattern-history.md`
 
 ---
 
+### 5. Why Flyweight Pattern for Styles?
+
+**Problem**: Storing full style objects in every cell wastes memory and complicates persistence.
+
+**Solution**: StyleManager maintains a central palette; cells store only a `styleId` reference.
+
+**Benefits**:
+- 1000 cells with identical styles = 1 palette entry
+- O(1) storage overhead per cell regardless of style complexity
+- Deduplication happens automatically via hash-based lookup
+- Simpler file format (styles stored once, referenced by ID)
+
+**Trade-off**: Extra indirection when reading styles (lookup by ID)
+
+---
+
 ## Module Boundaries
 
 ### What Modules Don't Do
@@ -683,7 +766,7 @@ Example: Adding "FormatMode" for bulk formatting operations
 2. Implement `execute()` and `undo()`
 3. Use via `HistoryManager.execute(new YourCommand(...))`
 
-Example: FormatRangeCommand for cell formatting (Epic 3)
+Example: See `FormatRangeCommand` for cell formatting
 
 ---
 

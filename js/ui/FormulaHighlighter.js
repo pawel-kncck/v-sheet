@@ -344,7 +344,7 @@ export class FormulaHighlighter {
     overlay.style.top = `${top}px`;
     overlay.style.width = `${width}px`;
     overlay.style.height = `${height}px`;
-    overlay.style.backgroundColor = this._hexToRgba(color, 0.3);
+    overlay.style.backgroundColor = this._hexToRgba(color, 0.2);
     overlay.style.pointerEvents = 'none';
     overlay.style.borderRadius = '2px';
 

@@ -11,7 +11,7 @@ This document provides a high-level overview of the UI layer components in v-she
 
 ## Component Overview
 
-The UI layer consists of five primary components, each with a single, well-defined responsibility:
+The UI layer consists of six primary components, each with a single, well-defined responsibility:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -19,11 +19,12 @@ The UI layer consists of five primary components, each with a single, well-defin
 │              (Top-Level Coordinator)                    │
 └───────────────────┬─────────────────────────────────────┘
                     │
-        ┌───────────┼───────────┬───────────┬─────────────┐
-        │           │           │           │             │
-        ▼           ▼           ▼           ▼             ▼
-  GridRenderer  SelectionMgr EditorMgr  ClipboardMgr  GridResizer
-    (Display)    (Selection)  (Editing)  (Copy/Paste)  (Resize)
+    ┌───────┬───────┼───────┬───────┬───────┬─────────┐
+    │       │       │       │       │       │         │
+    ▼       ▼       ▼       ▼       ▼       ▼         ▼
+ Grid    Select  Editor  Clipboard Grid    Toolbar
+ Render  Manager Manager Manager  Resizer  (Format)
+ (Display)(Select)(Edit)  (Copy)   (Resize)
 ```
 
 **Key Principle**: Each component is a **dumb controller** — it manages a specific aspect of the UI but doesn't contain business logic. The **Mode System** orchestrates their behavior.
@@ -63,6 +64,27 @@ this.emit('headerClick', { type, index, event });
 - Dynamic column widths and row heights
 - Cell formatting applied via inline styles (font, color, alignment)
 - Selection borders rendered via overlay divs
+
+#### updateCellStyle() Method
+Applies style objects to cell DOM elements:
+
+```javascript
+// Style object structure
+{
+  font: { bold, italic, underline, strikethrough, color, size, family },
+  fill: { color },
+  align: { h: 'left'|'center'|'right', v: 'top'|'middle'|'bottom' },
+  wrap: boolean
+}
+```
+
+**CSS Mappings**:
+- `font.bold` → `fontWeight: 'bold'`
+- `font.italic` → `fontStyle: 'italic'`
+- `font.color` → `color`
+- `fill.color` → `backgroundColor`
+- `align.h` → `textAlign`
+- `align.v` → Uses flexbox (`display: flex`, `alignItems`)
 
 #### DOM Structure
 ```html
@@ -384,6 +406,72 @@ startResize('col', [1, 2, 3], currentWidths, event);
 
 ---
 
+## 6. Toolbar
+
+**File**: `js/ui/Toolbar.js`
+
+### Responsibility
+Manages the **formatting toolbar** — font controls, colors, and alignment buttons.
+
+### Core Responsibilities
+- Render formatting UI controls (dropdowns, buttons, color pickers)
+- Respond to user interactions (clicks, selections)
+- Call Spreadsheet.applyRangeFormat() with style changes
+- Reflect current cell's formatting state (toggle button states)
+
+### Key Concepts
+
+#### Toolbar Controls
+
+| Control | Type | Style Property |
+|---------|------|----------------|
+| Font Family | Dropdown | `font.family` |
+| Font Size | Dropdown | `font.size` |
+| Bold | Toggle Button | `font.bold` |
+| Italic | Toggle Button | `font.italic` |
+| Text Color | Color Picker | `font.color` |
+| Fill Color | Color Picker | `fill.color` |
+| Align Left/Center/Right | Button Group | `align.h` |
+
+#### Toggle vs Set Mode
+- **Toggle mode** (Bold, Italic): Flips on/off based on active cell's current state
+- **Set mode** (Colors, Font Size): Always applies the selected value
+
+```javascript
+// Toggle mode example
+applyRangeFormat({ font: { bold: true } }, 'toggle');
+// If cell is bold → removes bold
+// If cell is not bold → adds bold
+
+// Set mode example
+applyRangeFormat({ font: { size: '14' } }, 'set');
+// Always sets font size to 14
+```
+
+#### Keyboard Shortcuts Integration
+Toolbar formatting can also be triggered via keyboard:
+- `Ctrl+B` / `Cmd+B` → Toggle bold
+- `Ctrl+I` / `Cmd+I` → Toggle italic
+
+These shortcuts are handled by InputController, which routes to the same `applyRangeFormat()` method.
+
+### Public API (Key Methods)
+
+| Method | Purpose |
+|--------|---------|
+| `updateState(cellId)` | Sync toolbar buttons with cell's style |
+| `setFormatHandler(callback)` | Set callback for format changes |
+
+### Interactions
+- **Spreadsheet**: Toolbar calls `applyRangeFormat()` on user interaction
+- **SelectionManager**: Active cell determines which style to display
+- **FileManager**: Via StyleManager, provides current cell's style
+- **FormatRangeCommand**: Created by Spreadsheet to execute formatting
+
+**Important**: Toolbar is **stateless** — it reflects the active cell's style but doesn't store formatting. StyleManager/FileManager own style data.
+
+---
+
 ## Component Interaction Patterns
 
 ### Pattern 1: Event-Driven Communication
@@ -664,4 +752,6 @@ This architecture makes the system:
 - **EditorManager**: `js/ui/EditorManager.js`
 - **ClipboardManager**: `js/ui/ClipboardManager.js`
 - **GridResizer**: `js/ui/GridResizer.js`
+- **Toolbar**: `js/ui/Toolbar.js`
+- **StyleManager**: `js/StyleManager.js`
 - **Spreadsheet Coordinator**: `js/spreadsheet.js`

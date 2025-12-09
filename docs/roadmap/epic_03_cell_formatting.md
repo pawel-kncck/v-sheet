@@ -1,9 +1,14 @@
 # PRD: Epic 3: Cell Formatting (Revised: Flyweight Architecture)
 
-- **Status:** Draft
-- **Date:** November 23, 2025
+- **Status:** Complete
+- **Completed:** December 2025
 - **Author:** v-sheet Team
 - **Depends On:** Epic 1 (History Management), Epic 2 (Testing & Logging)
+
+> **Implementation Note**: This epic has been fully implemented. See the following for current documentation:
+> - Architecture: [docs/architecture/00-system-overview.md](../architecture/00-system-overview.md) (Styling System, Formatting Flow)
+> - UI Components: [docs/architecture/03-ui-components.md](../architecture/03-ui-components.md) (Toolbar section)
+> - Test Scenarios: [docs/test-scenarios/formatting.scenarios.md](../test-scenarios/formatting.scenarios.md)
 
 ---
 

@@ -301,7 +301,7 @@ undo() {
 
 **File**: `js/history/commands/FormatRangeCommand.js`
 
-**Purpose**: Handle cell formatting (bold, colors, alignment) — Epic 9.
+**Purpose**: Handle cell formatting changes (bold, colors, alignment).
 
 #### Constructor Parameters
 ```javascript
@@ -319,10 +319,31 @@ new FormatRangeCommand({
 });
 ```
 
-**Note**: Similar structure to UpdateCellsCommand, but **only handles styles**, no values.
+**Key Features**:
+- **Deep merge**: New style properties merge with existing cell styles
+- **StyleManager integration**: Uses Flyweight pattern for style deduplication
+- **Toggle support**: Handles both "set" and "toggle" modes for bold/italic
 
-#### Execute/Undo Flow
-Same pattern as UpdateCellsCommand: apply `newStyle` on execute, `oldStyle` on undo.
+#### Execute Flow
+```javascript
+execute() {
+  cellUpdates.forEach(({ cellId, newStyleId }) => {
+    // 1. Get merged style object from StyleManager
+    const styleObject = styleManager.getStyle(newStyleId);
+
+    // 2. Update FileManager (sets cell.styleId)
+    fileManager.updateCellFormat(cellId, styleObject);
+
+    // 3. Update visual (applies CSS)
+    renderer.updateCellStyle(cellId, styleObject);
+  });
+}
+```
+
+#### Undo Flow
+Same pattern, but applies `oldStyleId` instead of `newStyleId`.
+
+**Important**: Unlike UpdateCellsCommand, FormatRangeCommand does NOT involve the FormulaWorker — styles are presentation-only.
 
 ---
 

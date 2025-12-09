@@ -1218,10 +1218,11 @@ test('Paste copies both value and style', async ({ page }) => {
   await page.keyboard.type('Styled');
   await page.keyboard.press('Enter');
 
-  // Apply formatting (assumes formatting UI exists)
+  // Apply bold formatting to B2
   await page.locator('[data-cell="B2"]').click();
-  // Trigger bold and background color through UI or programmatically
-  // This depends on your formatting implementation
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+B' : 'Control+B'
+  );
 
   // Copy B2
   await page.keyboard.press(
@@ -1237,18 +1238,15 @@ test('Paste copies both value and style', async ({ page }) => {
   // Check D5 has the value
   await expect(page.locator('[data-cell="D5"]')).toHaveText('Styled');
 
-  // Check D5 has the styling (requires specific class or style attribute)
-  // This will vary based on your styling implementation
-  // await expect(page.locator('[data-cell="D5"]')).toHaveCSS('font-weight', 'bold');
+  // Check D5 has the bold styling
+  await expect(page.locator('[data-cell="D5"]')).toHaveCSS('font-weight', '700');
 });
 ```
 
 **What This Tests**:
 - StyleManager integration with clipboard
 - Style preservation during copy/paste
-- FormatRangeCommand or equivalent
-
-**Note**: This scenario requires the formatting system to be implemented. See Epic 9 (Cell Formatting).
+- UpdateCellsCommand handling both value and style
 
 ---
 

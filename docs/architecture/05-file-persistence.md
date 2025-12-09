@@ -155,6 +155,48 @@ Instead of duplicating style objects for each cell:
 
 **Implementation**: StyleManager (`js/StyleManager.js`) generates unique IDs for style combinations.
 
+#### StyleManager Deep Dive
+
+StyleManager uses hash-based deduplication:
+
+```javascript
+class StyleManager {
+  constructor(existingStyles = {}) {
+    this.styles = existingStyles;           // { styleId: styleObject }
+    this.reverseLookup = new Map();         // hash → styleId
+  }
+
+  addStyle(styleObject) {
+    const hash = this._generateHash(styleObject);
+
+    // Return existing ID if style already exists
+    if (this.reverseLookup.has(hash)) {
+      return this.reverseLookup.get(hash);
+    }
+
+    // Create new entry
+    const newId = this._generateId();
+    this.styles[newId] = styleObject;
+    this.reverseLookup.set(hash, newId);
+    return newId;
+  }
+
+  getStyle(id) {
+    return this.styles[id] || null;
+  }
+}
+```
+
+**Key methods**:
+- `addStyle(styleObject)` → Returns styleId (creates new or returns existing)
+- `getStyle(styleId)` → Returns full style object
+- `getPalette()` → Returns all styles for file persistence
+
+**Integration with FileManager**:
+- `updateCellFormat(cellId, styleObject)` calls `styleManager.addStyle()`
+- `getCellStyle(cellId)` calls `styleManager.getStyle()`
+- Palette saved to `currentFile.data.styles` on save
+
 #### 3. Auto-Save with Debouncing
 To avoid excessive API calls on rapid edits:
 

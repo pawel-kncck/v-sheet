@@ -124,8 +124,32 @@ export class EnterMode extends NavigationMode {
         // Return false to allow browser to handle character input
         return false;
 
-// NEW: Handle DELETE (Backspace) explicitly
+// NEW: Handle DELETE (Backspace/Delete) explicitly
       case INTENTS.DELETE:
+        // In EnterMode, make Delete behave like Backspace for better UX
+        // This allows users to remove the last character with either key
+        if (context?.key === 'delete') {
+          // Trigger backspace behavior
+          if (this._editorManager) {
+            const editor = document.getElementById('cell-editor');
+            if (editor) {
+              const value = editor.value;
+              const cursorPos = editor.selectionStart;
+
+              // If cursor is at the end, remove last character (like Backspace)
+              if (cursorPos === value.length) {
+                editor.value = value.slice(0, -1);
+                editor.setSelectionRange(value.length - 1, value.length - 1);
+
+                // Trigger value change event for formula bar sync
+                if (this._editorManager.onValueChange) {
+                  this._editorManager.onValueChange(editor.value);
+                }
+                return true;
+              }
+            }
+          }
+        }
         // Return false to let the browser handle backspace in the input
         return false;
 
@@ -250,13 +274,18 @@ export class EnterMode extends NavigationMode {
 
     const currentValue = this._editorManager.getValue();
 
+    // Preserve cursor position when transitioning to EditMode
+    const editor = document.getElementById('cell-editor');
+    const cursorPosition = editor ? editor.selectionStart : currentValue.length;
+
     Logger.log(this.getName(), `Switching to EditMode for fine-tuning`);
 
-    // Switch to edit mode with current value
+    // Switch to edit mode with current value and cursor position
     this._requestModeSwitch('edit', {
       cellId: this._enteringCellId,
       initialValue: currentValue,
-      isFormula: currentValue.startsWith('=')
+      isFormula: currentValue.startsWith('='),
+      cursorPosition: cursorPosition
     });
 
     return true;

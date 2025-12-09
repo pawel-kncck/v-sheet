@@ -107,10 +107,12 @@ export class Spreadsheet {
 
     this._setupEventWiring();
     this._setupWorkerListeners();
-    this.selectionManager.selectCell({ row: 1, col: 0 });
 
     // Start in ready mode
     this.modeManager.switchMode('ready');
+
+    // Select A1 after mode is initialized
+    this.selectionManager.selectCell({ row: 1, col: 0 });
 
     Logger.log('Spreadsheet', 'Coordinator initialized with Mode System');
   }
@@ -188,18 +190,21 @@ export class Spreadsheet {
       });
     }
 
-    if (fileData.metadata?.lastActiveCell) {
-      const coords = this._cellIdToCoords(fileData.metadata.lastActiveCell);
-      if (coords) {
-        this.selectionManager.selectCell(coords);
+    // Use setTimeout to ensure DOM is fully ready before selecting
+    setTimeout(() => {
+      if (fileData.metadata?.lastActiveCell) {
+        const coords = this._cellIdToCoords(fileData.metadata.lastActiveCell);
+        if (coords) {
+          this.selectionManager.selectCell(coords);
+        } else {
+          // Invalid coords, default to A1
+          this.selectionManager.selectCell({ row: 1, col: 0 });
+        }
       } else {
-        // Invalid coords, default to A1
+        // No last active cell, default to A1
         this.selectionManager.selectCell({ row: 1, col: 0 });
       }
-    } else {
-      // No last active cell, default to A1
-      this.selectionManager.selectCell({ row: 1, col: 0 });
-    }
+    }, 0);
   }
 
   // ... [clear method same as before] ...
@@ -207,7 +212,7 @@ export class Spreadsheet {
     this.renderer.createGrid();
     this.selectionManager.clear();
     this.historyManager.clear();
-    this.selectionManager.selectCell({ row: 1, col: 0 });
+    // Note: Don't select A1 here - let loadFromFile or caller handle it
   }
 
   // ... [_setupEventWiring, _setupWorkerListeners, Drag methods same as before] ...

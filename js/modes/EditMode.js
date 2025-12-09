@@ -59,12 +59,12 @@ export class EditMode extends AbstractMode {
   /**
    * Called when entering edit mode.
    *
-   * @param {{ cellId: string, initialValue: string, isFormula: boolean }} payload
+   * @param {{ cellId: string, initialValue: string, isFormula: boolean, cursorPosition: number }} payload
    */
   onEnter(payload) {
     super.onEnter(payload);
 
-    const { cellId, initialValue = '', isFormula = false } = payload || {};
+    const { cellId, initialValue = '', isFormula = false, cursorPosition } = payload || {};
 
     this._editingCellId = cellId;
     this._initialValue = initialValue;
@@ -73,6 +73,17 @@ export class EditMode extends AbstractMode {
     // Start editing through EditorManager
     if (this._editorManager && cellId) {
       this._editorManager.startEdit(cellId, initialValue, null);
+
+      // If cursor position was provided (e.g., transitioning from EnterMode), restore it
+      if (typeof cursorPosition === 'number') {
+        setTimeout(() => {
+          const editor = document.getElementById('cell-editor');
+          if (editor) {
+            editor.setSelectionRange(cursorPosition, cursorPosition);
+          }
+        }, 0);
+      }
+
       // Focus the editor
       this._editorManager.focus();
     }

@@ -27,6 +27,9 @@ export class GridRenderer {
       onHeaderMouseMove: null,
       onHeaderMouseDown: null // Added based on existing code
     };
+
+    // Flag to prevent duplicate event listener attachment
+    this._eventListenersAttached = false;
   }
 
   // ... [Existing createGrid, updateCellContent, getCellElement, etc. methods remain unchanged] ...
@@ -38,26 +41,45 @@ export class GridRenderer {
     this.columnHeadersContainer = this.container.querySelector('#column-headers');
     this.rowHeadersContainer = this.container.querySelector('#row-headers');
     this.cellGridContainer = this.container.querySelector('#cell-grid');
-    
+
     if (!this.columnHeadersContainer || !this.rowHeadersContainer || !this.cellGridContainer) {
       Logger.error('GridRenderer', 'Required containers not found in DOM');
       throw new Error('Grid containers not found');
     }
-    
+
+    // Reset flags when recreating the grid since DOM will be replaced
+    this._eventListenersAttached = false;
+    this._scrollSyncSetup = false;
+
     this._createColumnHeaders();
     this._createRowHeaders();
     this._createCells();
     this.applyGridStyles();
     this._setupScrollSync();
     this._attachEventListeners();
-    
+
     Logger.log('GridRenderer', 'Grid created successfully');
   }
 
   updateCellContent(cellId, value) {
     const cell = this.getCellElement(cellId);
     if (cell) {
-      cell.textContent = value === undefined || value === null ? '' : value;
+      const displayValue = value === undefined || value === null ? '' : value;
+      cell.textContent = displayValue;
+
+      // Apply automatic alignment based on content type
+      // Numbers align right, text aligns left
+      // This will be overridden if updateCellStyle is called with explicit alignment
+      if (displayValue && String(displayValue).trim() !== '') {
+        const strValue = String(displayValue).trim();
+        // A value is a number if it can be parsed as a number AND
+        // the parsed number converts back to the same string (to avoid "123abc" -> 123)
+        const numValue = Number(strValue);
+        const isNumber = !isNaN(numValue) && isFinite(numValue) && strValue === String(numValue);
+        cell.style.textAlign = isNumber ? 'right' : 'left';
+      } else {
+        cell.style.textAlign = 'left';
+      }
     }
   }
 
@@ -110,7 +132,6 @@ export class GridRenderer {
     cell.style.textDecoration = '';
     cell.style.color = '';
     cell.style.backgroundColor = '';
-    cell.style.textAlign = '';
     cell.style.fontSize = '';
     cell.style.fontFamily = '';
     cell.style.whiteSpace = 'nowrap'; // Default
@@ -118,6 +139,20 @@ export class GridRenderer {
     cell.style.display = '';
     cell.style.alignItems = '';
     cell.style.justifyContent = '';
+
+    // Apply automatic alignment based on content type (before explicit styles)
+    // Numbers align right, text aligns left
+    const cellText = cell.textContent;
+    if (cellText && cellText.trim() !== '') {
+      const strValue = cellText.trim();
+      // A value is a number if it can be parsed as a number AND
+      // the parsed number converts back to the same string (to avoid "123abc" -> 123)
+      const numValue = Number(strValue);
+      const isNumber = !isNaN(numValue) && isFinite(numValue) && strValue === String(numValue);
+      cell.style.textAlign = isNumber ? 'right' : 'left';
+    } else {
+      cell.style.textAlign = 'left'; // Default for empty cells
+    }
 
     if (!style) return;
 
@@ -368,6 +403,12 @@ export class GridRenderer {
   }
 
   _setupScrollSync() {
+    // Only set up scroll sync once
+    if (this._scrollSyncSetup) {
+      return;
+    }
+    this._scrollSyncSetup = true;
+
     this.cellGridContainer.addEventListener('scroll', () => {
       this.columnHeadersContainer.scrollLeft = this.cellGridContainer.scrollLeft;
       this.rowHeadersContainer.scrollTop = this.cellGridContainer.scrollTop;
@@ -375,6 +416,12 @@ export class GridRenderer {
   }
 
   _attachEventListeners() {
+    // Only attach event listeners once to prevent duplicates
+    if (this._eventListenersAttached) {
+      return;
+    }
+    this._eventListenersAttached = true;
+
     const addListener = (element, eventName, callbackKey, dataExtractor) => {
       element.addEventListener(eventName, (e) => {
         if (this.callbacks[callbackKey]) {

@@ -115,12 +115,20 @@ The formula engine runs in a **Web Worker** (`js/engine/formula-worker.js`) for 
   - `SelectionManager` - Cell/range selection state and rendering
   - `EditorManager` - In-cell editing lifecycle
   - `GridResizer` - Column/row resize interactions
-  - `ClipboardManager` - Copy/paste operations
+  - `ClipboardManager` - Copy/paste operations (includes styles)
+  - `Toolbar` - Formatting controls (font, colors, alignment)
+
+- **Styling** (`js/`)
+  - `StyleManager` - Flyweight pattern for style deduplication (central palette)
 
 - **History** (`js/history/`)
   - `HistoryManager` - Undo/redo stack
   - `Command` - Base class using Command Pattern
-  - `commands/` - Concrete commands (UpdateCellsCommand, MoveRangeCommand, etc.)
+  - `commands/` - Concrete commands:
+    - `UpdateCellsCommand` - Cell value changes (with optional styles)
+    - `MoveRangeCommand` - Drag-to-move cells (preserves styles)
+    - `FormatRangeCommand` - Cell formatting changes (undo-able)
+    - `ResizeCommand` - Column/row resizing
 
 - **File Management**
   - `js/file-manager.js` - Client-side API wrapper and state
@@ -145,6 +153,15 @@ The formula engine runs in a **Web Worker** (`js/engine/formula-worker.js`) for 
 3. Mode calls SelectionManager methods
 4. SelectionManager updates state and triggers render
 5. GridRenderer draws selection borders
+
+**Formatting Flow**:
+1. User selects cells → Clicks toolbar button (or Ctrl+B/I)
+2. `Spreadsheet.applyRangeFormat()` called with style changes
+3. FormatRangeCommand created and executed
+4. StyleManager adds/retrieves style ID (deduplication)
+5. FileManager updates cell's `styleId` reference
+6. GridRenderer.updateCellStyle() applies CSS
+7. Autosave triggers → Flask API persists styles palette
 
 ## Testing Philosophy
 
@@ -217,6 +234,34 @@ Always handle worker responses asynchronously.
 - `$` prefix locks column/row during copy-paste
 - F4 cycles: A1 → $A$1 → A$1 → $A1 → A1
 - FormulaAdjuster utility handles paste adjustments
+
+### Cell Formatting
+
+**Keyboard shortcuts:**
+- `Ctrl+B` / `Cmd+B` - Toggle bold
+- `Ctrl+I` / `Cmd+I` - Toggle italic
+
+**Style structure:**
+```javascript
+{
+  font: { bold, italic, underline, strikethrough, color, size, family },
+  fill: { color },
+  align: { h: 'left'|'center'|'right', v: 'top'|'middle'|'bottom' },
+  wrap: boolean
+}
+```
+
+**Architecture (Flyweight Pattern):**
+- `StyleManager` maintains a central palette of unique styles
+- Cells store `styleId` references, not full style objects
+- Identical styles across cells share one palette entry
+- `FormatRangeCommand` handles undo/redo with deep merge
+
+**Key files:**
+- `js/StyleManager.js` - Flyweight palette with deduplication
+- `js/ui/Toolbar.js` - Formatting UI controls
+- `js/history/commands/FormatRangeCommand.js` - Undo-able formatting
+- `js/ui/GridRenderer.js` - `updateCellStyle()` applies CSS
 
 ## File API Endpoints
 

@@ -63,6 +63,13 @@ ReadyMode is the default navigation state when no editing is occurring.
 | **Type =, +, -** | Start Formula | Enters PointMode for formula building |
 | **Type any character** | Start Entry | Enters EnterMode for quick data entry |
 
+### Formatting
+
+| Shortcut | Action | Description |
+|----------|--------|-------------|
+| **Cmd+B** | Toggle Bold | Toggles bold formatting on selected cells |
+| **Cmd+I** | Toggle Italic | Toggles italic formatting on selected cells |
+
 ---
 
 ## EnterMode Shortcuts
@@ -340,6 +347,8 @@ Click column/row header → Cmd+C
 | Select to Edge | Cmd+Shift+Arrow | Ctrl+Shift+Arrow |
 | Jump to Start | Cmd+Home | Ctrl+Home |
 | Select All | Cmd+A | Ctrl+A |
+| Toggle Bold | Cmd+B | Ctrl+B |
+| Toggle Italic | Cmd+I | Ctrl+I |
 
 **Note**: The v-sheet InputController automatically normalizes Cmd (macOS) and Ctrl (Windows/Linux) so the same logic handles both platforms.
 
@@ -351,9 +360,7 @@ The following are common spreadsheet shortcuts that may be added in future versi
 
 | Shortcut | Typical Action | Status |
 |----------|----------------|--------|
-| **Cmd+B** | Bold formatting | Planned (Epic 3) |
-| **Cmd+I** | Italic formatting | Planned (Epic 3) |
-| **Cmd+U** | Underline | Planned (Epic 3) |
+| **Cmd+U** | Underline | Not implemented |
 | **Cmd+D** | Fill Down | Not planned |
 | **Cmd+R** | Fill Right | Not planned |
 | **Cmd+;** | Insert Date | Not planned |

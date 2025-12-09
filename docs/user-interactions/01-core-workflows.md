@@ -438,6 +438,90 @@ This document describes the fundamental user workflows in v-sheet. Each workflow
 
 ---
 
+## 16. Apply Bold Formatting
+
+**Goal**: User makes selected cells bold
+
+### Step-by-Step Flow
+
+1. **User selects cells B2:B5**
+   - **Visual**: Blue selection highlight on B2:B5
+   - **State**: `SelectionManager.ranges = [{start: B2, end: B5}]`, `Mode = Ready`
+
+2. **User presses Ctrl+B (or clicks Bold button in toolbar)**
+   - **Visual**:
+     - Text in B2:B5 becomes bold
+     - Bold button in toolbar appears pressed/active
+   - **State**:
+     - FormatRangeCommand created with `{ font: { bold: true } }`
+     - StyleManager creates/retrieves styleId for bold style
+     - Each cell's `styleId` updated in FileManager
+     - GridRenderer.updateCellStyle() applies CSS
+
+3. **User presses Ctrl+B again (toggle off)**
+   - **Visual**:
+     - Text in B2:B5 returns to normal weight
+     - Bold button appears unpressed
+   - **State**: New FormatRangeCommand with `{ font: { bold: false } }`
+
+**Key Behavior**: Bold is a toggle — pressing Ctrl+B when already bold removes bold
+
+---
+
+## 17. Apply Background Color
+
+**Goal**: User sets a background color on cells
+
+### Step-by-Step Flow
+
+1. **User selects cells C3:D4**
+   - **Visual**: Blue selection on C3:D4
+   - **State**: `SelectionManager.ranges = [{start: C3, end: D4}]`
+
+2. **User clicks Fill Color picker in toolbar, selects yellow (#FFFF00)**
+   - **Visual**:
+     - Background of C3, C4, D3, D4 turns yellow
+     - Fill color picker shows yellow as selected
+   - **State**:
+     - FormatRangeCommand created with `{ fill: { color: '#FFFF00' } }`
+     - StyleManager deduplicates: if another cell had same yellow, shares styleId
+     - Command added to history (undo-able)
+
+3. **User presses Ctrl+Z (undo)**
+   - **Visual**: Cells return to white background
+   - **State**: FormatRangeCommand.undo() restores old styleIds
+
+**Key Behavior**: Colors are "set" mode (not toggle) — selecting a color always applies it
+
+---
+
+## 18. Copy and Paste with Styles
+
+**Goal**: User copies formatted cells and pastes both values and formatting
+
+### Step-by-Step Flow
+
+1. **User has cell A1 with value "Total" and bold + blue background**
+   - **Visual**: A1 shows bold "Total" with blue fill
+   - **State**: `A1.styleId` points to style with `{ font: { bold: true }, fill: { color: '#0000FF' } }`
+
+2. **User selects A1, presses Cmd+C**
+   - **Visual**: Marching ants border on A1
+   - **State**: ClipboardManager stores `{ value: "Total", style: {...} }`
+
+3. **User selects E5, presses Cmd+V**
+   - **Visual**:
+     - E5 shows bold "Total" with blue background (same as A1)
+     - Marching ants disappear
+   - **State**:
+     - UpdateCellsCommand created with both `newValue` and `newStyle`
+     - StyleManager may reuse existing styleId or create new one
+     - E5 has same visual appearance as A1
+
+**Key Behavior**: Paste copies both value AND style — cells get identical formatting
+
+---
+
 ## Summary of Key Workflows
 
 | Workflow | Mode Involved | Key Shortcut | Result |
@@ -456,6 +540,10 @@ This document describes the fundamental user workflows in v-sheet. Each workflow
 | Extend to edge | Ready | Cmd+Shift+Arrow | Select to data boundary |
 | Cancel edit | Edit/Enter | Escape | Discard changes |
 | Double-click edit | Edit | Double-click | Enter edit mode |
+| Toggle bold | Ready | Ctrl+B / Cmd+B | Apply or remove bold |
+| Toggle italic | Ready | Ctrl+I / Cmd+I | Apply or remove italic |
+| Apply fill color | Ready | Toolbar picker | Set background color |
+| Paste with styles | Ready | Cmd+V | Copy values and formatting |
 
 ---
 

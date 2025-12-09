@@ -449,22 +449,27 @@ test('Undo column resize restores original width', async ({ page }) => {
 test('Undo formatting restores previous style', async ({ page }) => {
   await page.goto('http://localhost:5000');
 
+  // Enter text in B2
   await page.locator('[data-cell="B2"]').click();
   await page.keyboard.type('Styled');
   await page.keyboard.press('Enter');
 
-  // Apply formatting (assumes formatting UI exists)
-  // This is a placeholder - actual implementation depends on Epic 9
+  // Apply bold formatting to B2
   await page.locator('[data-cell="B2"]').click();
-  // ... trigger bold and background color via UI ...
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+B' : 'Control+B'
+  );
+
+  // Verify bold was applied
+  await expect(page.locator('[data-cell="B2"]')).toHaveCSS('font-weight', '700');
 
   // Undo formatting
   await page.keyboard.press(
     process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z'
   );
 
-  // Check styling is removed (requires checking computed styles or class)
-  // await expect(page.locator('[data-cell="B2"]')).not.toHaveCSS('font-weight', 'bold');
+  // Check styling is removed (font-weight back to normal)
+  await expect(page.locator('[data-cell="B2"]')).toHaveCSS('font-weight', '400');
 });
 ```
 
@@ -472,8 +477,6 @@ test('Undo formatting restores previous style', async ({ page }) => {
 - FormatRangeCommand.undo() removes new styles
 - StyleManager integration
 - Format state restoration
-
-**Note**: This scenario requires Epic 9 (Cell Formatting) to be implemented.
 
 ---
 
