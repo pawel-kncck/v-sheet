@@ -73,6 +73,11 @@ export class PointMode extends NavigationMode {
     this._formulaCellId = cellId;
     this._baseFormula = triggerKey; // Initialize base formula (could be '=' or full formula like '=SUM(A1+')
 
+    // Hide fill handle during formula editing
+    if (this._selectionManager && this._selectionManager._fillHandle) {
+      this._selectionManager._fillHandle.hide();
+    }
+
     // Start editing with the trigger/formula
     if (this._editorManager && cellId) {
       // If triggerKey is just '=', use it as both initialValue and triggerKey
@@ -110,6 +115,11 @@ export class PointMode extends NavigationMode {
     // Clean up state
     this._formulaCellId = null;
     this._initialFormula = '';
+
+    // Show fill handle again after editing
+    if (this._selectionManager && this._selectionManager._fillHandle) {
+      this._selectionManager._fillHandle.render();
+    }
   }
 
   /**

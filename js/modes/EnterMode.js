@@ -64,6 +64,11 @@ export class EnterMode extends NavigationMode {
     this._enteringCellId = cellId;
     this._initialValue = triggerKey;
 
+    // Hide fill handle during editing
+    if (this._selectionManager && this._selectionManager._fillHandle) {
+      this._selectionManager._fillHandle.hide();
+    }
+
     // Start editing with the trigger character
     if (this._editorManager && cellId) {
       // Clear the cell and start with the trigger key
@@ -88,6 +93,11 @@ export class EnterMode extends NavigationMode {
     // Clean up state
     this._enteringCellId = null;
     this._initialValue = '';
+
+    // Show fill handle again after editing
+    if (this._selectionManager && this._selectionManager._fillHandle) {
+      this._selectionManager._fillHandle.render();
+    }
   }
 
   /**

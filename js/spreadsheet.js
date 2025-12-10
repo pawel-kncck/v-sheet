@@ -117,7 +117,12 @@ export class Spreadsheet {
       container: this.renderer.cellGridContainer.parentElement,
       selectionManager: this.selectionManager,
       gridRenderer: this.renderer,
-      onFillComplete: (fillData) => this._executeFill(fillData)
+      onFillComplete: (fillData) => this._executeFill(fillData),
+      onFillStart: (event) => {
+        this.isFilling = true;
+        window.addEventListener('mousemove', this._onFillMouseMove);
+        window.addEventListener('mouseup', this._onFillMouseUp, { once: true });
+      }
     });
 
     // Pass fill handle to SelectionManager

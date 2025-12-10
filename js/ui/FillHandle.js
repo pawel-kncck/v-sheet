@@ -8,12 +8,14 @@ export class FillHandle {
    * @param {SelectionManager} params.selectionManager
    * @param {GridRenderer} params.gridRenderer
    * @param {Function} params.onFillComplete - Callback with fill data
+   * @param {Function} params.onFillStart - Callback when fill drag starts (for setting up window listeners)
    */
-  constructor({ container, selectionManager, gridRenderer, onFillComplete }) {
+  constructor({ container, selectionManager, gridRenderer, onFillComplete, onFillStart }) {
     this.container = container;
     this.selectionManager = selectionManager;
     this.gridRenderer = gridRenderer;
     this.onFillComplete = onFillComplete;
+    this.onFillStart = onFillStart;
 
     // DOM elements
     this.element = null; // The fill handle dot
@@ -26,6 +28,28 @@ export class FillHandle {
       startCoords: null,
       currentCoords: null
     };
+
+    // Bind event handlers
+    this._onMouseDown = this._onMouseDown.bind(this);
+  }
+
+  /**
+   * Handle mousedown on fill handle element
+   * @private
+   */
+  _onMouseDown(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const bounds = this.selectionManager.getSelectionBounds();
+    if (!bounds) return;
+
+    this.startDrag(event, this.selectionManager.getSelection());
+
+    // Notify parent to set up window listeners
+    if (this.onFillStart) {
+      this.onFillStart(event);
+    }
   }
 
   /**
@@ -49,6 +73,7 @@ export class FillHandle {
     if (!this.element) {
       this.element = document.createElement('div');
       this.element.id = 'fill-handle';
+      this.element.addEventListener('mousedown', this._onMouseDown);
       this.container.appendChild(this.element);
     }
 

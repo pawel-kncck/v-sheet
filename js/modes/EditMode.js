@@ -70,6 +70,11 @@ export class EditMode extends AbstractMode {
     this._initialValue = initialValue;
     this._isFormula = isFormula;
 
+    // Hide fill handle during editing
+    if (this._selectionManager && this._selectionManager._fillHandle) {
+      this._selectionManager._fillHandle.hide();
+    }
+
     // Start editing through EditorManager
     if (this._editorManager && cellId) {
       this._editorManager.startEdit(cellId, initialValue, null);
@@ -108,6 +113,11 @@ export class EditMode extends AbstractMode {
     this._editingCellId = null;
     this._initialValue = null;
     this._isFormula = false;
+
+    // Show fill handle again after editing
+    if (this._selectionManager && this._selectionManager._fillHandle) {
+      this._selectionManager._fillHandle.render();
+    }
   }
 
   /**
