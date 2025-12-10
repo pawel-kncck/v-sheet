@@ -16,6 +16,61 @@ body {
   overflow: hidden;
 }
 
+/* ==================== MENU BAR STYLES ==================== */
+#menu-bar-container {
+  flex-shrink: 0;
+}
+
+.menu-bar {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  background-color: #ffffff;
+  padding: 0 8px;
+  gap: 0;
+}
+
+.menu-item {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #202124;
+  cursor: pointer;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.menu-item:hover {
+  background-color: #e8eaed;
+}
+
+.menu-item.active {
+  background-color: #e8eaed;
+}
+
+.menu-dropdown {
+  display: none;
+  position: fixed;
+  background-color: #ffffff;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  min-width: 150px;
+  z-index: 1000;
+  padding: 4px 0;
+}
+
+.menu-dropdown-item {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #202124;
+  cursor: pointer;
+  user-select: none;
+}
+
+.menu-dropdown-item:hover {
+  background-color: #f1f3f4;
+}
+
 /* ==================== TOOLBAR STYLES ==================== */
 #toolbar-container {
   height: 40px;

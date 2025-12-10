@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/spreadsheet.css" />
   </head>
   <body>
+    <div id="menu-bar-container"></div>
     <div id="toolbar-container"></div>
     <!-- Formula bar container -->
     <div id="formula-bar-container">
@@ -120,6 +121,7 @@
       import { FormulaBar } from './js/formula-bar.js';
       import { Spreadsheet } from './js/spreadsheet.js';
       import { Toolbar } from './js/ui/Toolbar.js';
+      import { TopBarMenu } from './js/ui/TopBarMenu.js';
 
       let fileManager;
       let formulaBar;
@@ -191,6 +193,10 @@
               // 2. Initialize Toolbar
               const toolbarContainer = document.getElementById('toolbar-container');
               const toolbar = new Toolbar(toolbarContainer, spreadsheet);
+
+              // 3. Initialize Menu Bar
+              const menuBarContainer = document.getElementById('menu-bar-container');
+              const topBarMenu = new TopBarMenu(menuBarContainer, spreadsheet);
 
               // Connect components
               spreadsheet.setFileManager(fileManager);
