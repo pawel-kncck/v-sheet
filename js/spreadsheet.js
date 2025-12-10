@@ -4,8 +4,13 @@ import { UpdateCellsCommand } from './history/commands/UpdateCellsCommand.js';
 import { MoveRangeCommand } from './history/commands/MoveRangeCommand.js';
 import { ResizeCommand } from './history/commands/ResizeCommand.js';
 import { FormatRangeCommand } from './history/commands/FormatRangeCommand.js';
+import { BorderFormatCommand } from './history/commands/BorderFormatCommand.js';
+import { FillRangeCommand } from './history/commands/FillRangeCommand.js';
 import { Logger } from './engine/utils/Logger.js';
 import { CellHelpers } from './engine/utils/CellHelpers.js';
+import { BorderResolver } from './ui/BorderResolver.js';
+import { FillPatternDetector } from './engine/utils/FillPatternDetector.js';
+import { FormulaAdjuster } from './engine/utils/FormulaAdjuster.js';
 
 // UI Modules
 import { GridRenderer } from './ui/GridRenderer.js';
@@ -15,6 +20,8 @@ import { EditorManager } from './ui/EditorManager.js';
 import { ClipboardManager } from './ui/ClipboardManager.js';
 import { InputController } from './ui/InputController.js';
 import { FormulaHighlighter } from './ui/FormulaHighlighter.js';
+import { BorderMenu } from './ui/BorderMenu.js';
+import { FillHandle } from './ui/FillHandle.js';
 
 // Mode System
 import { ModeManager } from './modes/ModeManager.js';
@@ -59,10 +66,13 @@ export class Spreadsheet {
 
     this.historyManager = new HistoryManager(100);
     this.isDraggingCells = false;
+    this.isFilling = false;
     this.dragInfo = {};
 
     this._onDragMouseMove = this._onDragMouseMove.bind(this);
     this._onDragMouseUp = this._onDragMouseUp.bind(this);
+    this._onFillMouseMove = this._onFillMouseMove.bind(this);
+    this._onFillMouseUp = this._onFillMouseUp.bind(this);
 
     this.fileManager = null;
     this.formulaBar = null;
@@ -70,6 +80,9 @@ export class Spreadsheet {
 
     // Initialize Status Bar (before mode system so it can receive mode updates)
     this.statusBar = new StatusBar(this);
+
+    // Initialize Border Menu
+    this.borderMenu = new BorderMenu(this);
 
     // Initialize Mode System
     const modeContext = {
@@ -98,6 +111,17 @@ export class Spreadsheet {
 
     // Create grid first (so cellGridContainer exists)
     this.renderer.createGrid();
+
+    // Initialize Fill Handle
+    this.fillHandle = new FillHandle({
+      container: this.renderer.cellGridContainer.parentElement,
+      selectionManager: this.selectionManager,
+      gridRenderer: this.renderer,
+      onFillComplete: (fillData) => this._executeFill(fillData)
+    });
+
+    // Pass fill handle to SelectionManager
+    this.selectionManager._fillHandle = this.fillHandle;
 
     // Initialize InputController after grid is created
     this.inputController = new InputController(
@@ -224,10 +248,20 @@ export class Spreadsheet {
       this.renderer.cellGridContainer.focus();
       if (this.editor.isEditing) return;
       if (this.resizer.isResizing) return;
-      
+
       const coords = this._getCellCoordsFromElement(cellElement);
       const cursor = this.selectionManager.getCursorForCell(coords, event, cellElement);
-      
+
+      if (cursor === 'crosshair') {
+        // Start fill operation
+        event.preventDefault();
+        this.isFilling = true;
+        this.fillHandle.startDrag(event, this.selectionManager.getSelection());
+        window.addEventListener('mousemove', this._onFillMouseMove);
+        window.addEventListener('mouseup', this._onFillMouseUp, { once: true });
+        return;
+      }
+
       if (cursor === 'grab') {
         this.isDraggingCells = true;
         const ranges = this.selectionManager.ranges;
@@ -235,7 +269,7 @@ export class Spreadsheet {
         this.dragInfo = {
           startX: event.clientX,
           startY: event.clientY,
-          startCoords: coords, 
+          startCoords: coords,
           selection: activeRange
         };
         this.renderer.showDragGhost(activeRange);
@@ -243,12 +277,12 @@ export class Spreadsheet {
         window.addEventListener('mouseup', this._onDragMouseUp, { once: true });
         return;
       }
-      if (event.button === 2) return; 
+      if (event.button === 2) return;
       this.selectionManager.selectCell(coords, event.shiftKey, event.metaKey || event.ctrlKey);
     });
 
     this.renderer.on('cellMouseOver', ({ cellElement, event }) => {
-      if (this.editor.isEditing || this.isDraggingCells || this.resizer.isResizing) return;
+      if (this.editor.isEditing || this.isDraggingCells || this.isFilling || this.resizer.isResizing) return;
       const coords = this._getCellCoordsFromElement(cellElement);
       if (event.buttons === 1) {
         this.selectionManager.selectCell(coords, true, false);
@@ -440,6 +474,24 @@ export class Spreadsheet {
     }
   }
 
+  _onFillMouseMove(event) {
+    if (!this.isFilling) return;
+    this.fillHandle.updateDrag(event);
+  }
+
+  _onFillMouseUp(event) {
+    if (!this.isFilling) return;
+
+    window.removeEventListener('mousemove', this._onFillMouseMove);
+
+    const result = this.fillHandle.endDrag(event);
+    this.isFilling = false;
+
+    if (result && result.targetRange) {
+      this._executeFill(result);
+    }
+  }
+
   // ==========================================================================
   // LOGIC HELPERS
   // ==========================================================================
@@ -556,6 +608,35 @@ export class Spreadsheet {
     const command = new FormatRangeCommand({
       cellIds,
       styleChanges: finalStyle,
+      fileManager: this.fileManager,
+      renderer: this.renderer
+    });
+
+    this.historyManager.execute(command);
+  }
+
+  /**
+   * Apply border formatting to current selection
+   * @param {string[]} positions - Array of position names ['top', 'bottom', 'outer', etc.]
+   * @param {Object|null} borderStyle - { style: 'solid', color: '#000', width: 1 } or null to clear
+   */
+  applyBorderFormat(positions, borderStyle) {
+    const selection = this.selectionManager.ranges[this.selectionManager.ranges.length - 1];
+    if (!selection) return;
+
+    // Resolve positions to cell-specific changes
+    const cellBorderChanges = BorderResolver.resolveBorderChanges(
+      selection,
+      positions,
+      borderStyle
+    );
+
+    // If no changes, return early
+    if (Object.keys(cellBorderChanges).length === 0) return;
+
+    // Create and execute command
+    const command = new BorderFormatCommand({
+      cellBorderChanges,
       fileManager: this.fileManager,
       renderer: this.renderer
     });
@@ -680,6 +761,86 @@ export class Spreadsheet {
   
   getCellValue(cellId) {
     return this.fileManager.getRawCellValue(cellId);
+  }
+
+  _executeFill({ sourceSelection, targetRange, fillDirection, reverse }) {
+    // Get source data
+    const sourceData = this._getSourceDataForFill(sourceSelection);
+
+    // Generate fill values
+    const fillData = FillPatternDetector.generateFillData({
+      sourceRange: sourceData,
+      targetRange,
+      fillDirection,
+      reverse
+    });
+
+    // Apply formula adjustments
+    const cellUpdates = fillData.map(fill => {
+      let value = fill.value;
+
+      // Adjust formula references if needed
+      if (value && value.startsWith('=')) {
+        const rowOffset = fill.targetRow - fill.sourceRow;
+        const colOffset = fill.targetCol - fill.sourceCol;
+        value = FormulaAdjuster.adjustFormula(value, rowOffset, colOffset);
+      }
+
+      return {
+        cellId: fill.cellId,
+        newValue: value,
+        oldValue: this.fileManager.getRawCellValue(fill.cellId),
+        newStyle: fill.style,
+        oldStyle: this.fileManager.getCellStyle(fill.cellId)
+      };
+    });
+
+    if (cellUpdates.length === 0) return;
+
+    // Execute command
+    const command = new FillRangeCommand({
+      cellUpdates,
+      fileManager: this.fileManager,
+      formulaWorker: this.formulaWorker,
+      renderer: this.renderer
+    });
+
+    this.historyManager.execute(command);
+
+    // Expand selection to include filled cells
+    this.selectionManager.selectCell(
+      { row: targetRange.minRow, col: targetRange.minCol },
+      false,
+      false
+    );
+    this.selectionManager.selectCell(
+      { row: targetRange.maxRow, col: targetRange.maxCol },
+      true,
+      false
+    );
+  }
+
+  _getSourceDataForFill(sourceSelection) {
+    const { minRow, maxRow, minCol, maxCol } = sourceSelection;
+    const sourceData = [];
+
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const cellId = this._buildCellId(row, col);
+        const value = this.fileManager.getRawCellValue(cellId);
+        const style = this.fileManager.getCellStyle(cellId);
+
+        sourceData.push({
+          cellId,
+          value: value || '',
+          isFormula: value && value.startsWith('='),
+          style,
+          coords: { row, col }
+        });
+      }
+    }
+
+    return sourceData;
   }
 
   _executeMoveCommand(selection, colOffset, rowOffset, targetTopLeft) {

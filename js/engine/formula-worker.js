@@ -21,6 +21,7 @@ let engine;
 /**
  * Serializes update values, converting error objects to their string representation.
  * This is necessary because postMessage doesn't preserve custom toString() methods.
+ * Also converts boolean values to "TRUE"/"FALSE" strings (standard spreadsheet behavior).
  * @param {Object} updates - Map of cellId to value
  * @returns {Object} - Map of cellId to serialized value
  */
@@ -30,6 +31,9 @@ function serializeUpdates(updates) {
     // If value is an Error-like object with a toString method, use it
     if (value && typeof value === 'object' && typeof value.toString === 'function' && value.name && value.name.startsWith('#')) {
       serialized[cellId] = value.toString();
+    } else if (typeof value === 'boolean') {
+      // Convert booleans to "TRUE" or "FALSE" strings (Excel/GSheets behavior)
+      serialized[cellId] = value ? 'TRUE' : 'FALSE';
     } else {
       serialized[cellId] = value;
     }

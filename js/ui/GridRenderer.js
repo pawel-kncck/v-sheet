@@ -139,6 +139,8 @@ export class GridRenderer {
     cell.style.display = '';
     cell.style.alignItems = '';
     cell.style.justifyContent = '';
+    // Reset borders
+    this._clearCellBorders(cell);
 
     // Apply automatic alignment based on content type (before explicit styles)
     // Numbers align right, text aligns left
@@ -202,6 +204,51 @@ export class GridRenderer {
       cell.style.whiteSpace = 'normal';
       cell.style.wordBreak = 'break-word';
     }
+
+    // 6. Apply Borders (borders were cleared in reset section above)
+    if (style.border) {
+      this.updateCellBorder(cellId, style.border);
+    }
+  }
+
+  /**
+   * Apply border styles to a cell
+   * @param {string} cellId
+   * @param {Object} borderStyle - { top?, right?, bottom?, left? } each with { style, color, width }
+   */
+  updateCellBorder(cellId, borderStyle) {
+    const cell = this.getCellElement(cellId);
+    if (!cell) return;
+
+    // Clear existing borders first
+    this._clearCellBorders(cell);
+
+    if (!borderStyle) return;
+
+    // Apply new borders
+    if (borderStyle.top) {
+      cell.style.borderTop = `${borderStyle.top.width}px ${borderStyle.top.style} ${borderStyle.top.color}`;
+    }
+    if (borderStyle.right) {
+      cell.style.borderRight = `${borderStyle.right.width}px ${borderStyle.right.style} ${borderStyle.right.color}`;
+    }
+    if (borderStyle.bottom) {
+      cell.style.borderBottom = `${borderStyle.bottom.width}px ${borderStyle.bottom.style} ${borderStyle.bottom.color}`;
+    }
+    if (borderStyle.left) {
+      cell.style.borderLeft = `${borderStyle.left.width}px ${borderStyle.left.style} ${borderStyle.left.color}`;
+    }
+  }
+
+  /**
+   * Clear all border styles from a cell
+   * @param {HTMLElement} cell
+   */
+  _clearCellBorders(cell) {
+    cell.style.borderTop = '';
+    cell.style.borderRight = '';
+    cell.style.borderBottom = '';
+    cell.style.borderLeft = '';
   }
 
   // ... [Existing scrollCellIntoView, clearAllHighlights, highlightCells, highlightColumnHeader, highlightRowHeader methods] ...

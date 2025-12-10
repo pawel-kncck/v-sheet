@@ -12,7 +12,8 @@
 // 1. Import the function implementations
 import { mathFunctions } from './math.js';
 import { logicalFunctions } from './logical.js';
-// We will import text.js, lookup.js, etc. here later
+import { textFunctions } from './text.js';
+import { lookupFunctions } from './lookup.js';
 
 /**
  * Populates a given FunctionRegistry with all built-in functions.
@@ -25,12 +26,30 @@ export function registerFunctions(registry) {
   registry.register('AVERAGE', mathFunctions.AVERAGE);
   registry.register('MIN', mathFunctions.MIN);
   registry.register('MAX', mathFunctions.MAX);
+  registry.register('COUNT', mathFunctions.COUNT);
+  registry.register('COUNTA', mathFunctions.COUNTA);
+  registry.register('ROUND', mathFunctions.ROUND);
+  registry.register('SUMIF', mathFunctions.SUMIF);
+  registry.register('SUMPRODUCT', mathFunctions.SUMPRODUCT);
 
   // 3. Register the Logical functions
   registry.register('IF', logicalFunctions.IF);
-  // registry.register("AND", logicalFunctions.AND); // ...etc
+  registry.register('AND', logicalFunctions.AND);
+  registry.register('OR', logicalFunctions.OR);
+  registry.register('NOT', logicalFunctions.NOT);
 
-  // 4. Register other function categories...
+  // 4. Register the Text functions
+  registry.register('LEN', textFunctions.LEN);
+  registry.register('UPPER', textFunctions.UPPER);
+  registry.register('LOWER', textFunctions.LOWER);
+  registry.register('TRIM', textFunctions.TRIM);
+  registry.register('CONCATENATE', textFunctions.CONCATENATE);
+  registry.register('LEFT', textFunctions.LEFT);
+  registry.register('RIGHT', textFunctions.RIGHT);
+  registry.register('MID', textFunctions.MID);
+
+  // 5. Register the Lookup functions
+  registry.register('VLOOKUP', lookupFunctions.VLOOKUP);
 }
 
 // If using CommonJS (for the worker's importScripts)

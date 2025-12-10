@@ -92,6 +92,14 @@ export class Toolbar {
         action: (val) => this.spreadsheet.applyRangeFormat({ fill: { color: val } })
       },
 
+      // --- BORDERS ---
+      {
+        type: 'border',
+        id: 'borders',
+        icon: '<path d="M3 3v18h18V3H3zm16 16H5V5h14v14zM7 7h4v4H7V7zm6 0h4v4h-4V7zm-6 6h4v4H7v-4zm6 0h4v4h-4v-4z"/>',
+        tooltip: 'Borders'
+      },
+
       { type: 'separator' },
       // ... Align buttons ...
       {
@@ -162,7 +170,7 @@ export class Toolbar {
         input.type = 'color';
         input.value = item.value || '#000000';
         input.className = 'hidden-color-input';
-        
+
         // Trigger input when wrapper clicked
         wrapper.addEventListener('click', () => input.click());
 
@@ -177,6 +185,31 @@ export class Toolbar {
 
         wrapper.appendChild(input);
         this.container.appendChild(wrapper);
+        return;
+      }
+
+      // 2.5. Render Border Button (opens menu)
+      if (item.type === 'border') {
+        const btn = document.createElement('button');
+        btn.className = 'toolbar-btn';
+        btn.dataset.id = item.id;
+        btn.title = item.tooltip || '';
+
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.innerHTML = item.icon;
+
+        btn.appendChild(svg);
+
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (this.spreadsheet.borderMenu) {
+            this.spreadsheet.borderMenu.toggle(btn);
+          }
+          // Don't refocus grid - menu needs focus
+        });
+
+        this.container.appendChild(btn);
         return;
       }
 

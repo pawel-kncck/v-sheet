@@ -82,9 +82,26 @@ clear() {
    */
   getCursorForCell(coords, event, cellElement) {
     const cellId = this._coordsToCellId(coords);
-    
+
     // Quick check: if cell isn't selected, we don't care
     if (!this.getSelectedCellIds().includes(cellId)) return 'default';
+
+    // NEW: Check for fill handle (bottom-right corner of selection)
+    const bounds = this.getSelectionBounds();
+    if (bounds && coords.row === bounds.maxRow && coords.col === bounds.maxCol) {
+      const rect = cellElement.getBoundingClientRect();
+      const x = event.clientX;
+      const y = event.clientY;
+
+      // 10px hit zone in bottom-right corner
+      const nearBottomRight =
+        (rect.right - x) <= 10 &&
+        (rect.bottom - y) <= 10;
+
+      if (nearBottomRight) {
+        return 'crosshair';
+      }
+    }
 
     // Get visual bounds of the cell
     const rect = cellElement.getBoundingClientRect();
@@ -111,9 +128,9 @@ clear() {
       const maxRow = Math.max(start.row, end.row);
 
       // Check if current cell is within this range
-      if (coords.col >= minCol && coords.col <= maxCol && 
+      if (coords.col >= minCol && coords.col <= maxCol &&
           coords.row >= minRow && coords.row <= maxRow) {
-        
+
         // Valid Grab conditions:
         // 1. Near Top AND cell is top row of range
         if (nearTop && coords.row === minRow) return 'grab';
@@ -478,6 +495,11 @@ clear() {
     if (this.activeCell) {
       const activeId = this._coordsToCellId(this.activeCell);
       this.gridRenderer.highlightCells([activeId], 'selected');
+    }
+
+    // 6. Render fill handle (if single range and fillHandle is set)
+    if (this.ranges.length === 1 && this._fillHandle) {
+      this._fillHandle.render();
     }
   }
 

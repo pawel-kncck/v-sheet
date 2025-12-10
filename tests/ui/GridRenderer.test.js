@@ -103,4 +103,46 @@ describe('GridRenderer', () => {
         expect(callback).toHaveBeenCalled();
         expect(callback.mock.calls[0][0].cellElement).toBe(cell);
     });
+
+    it('should clear borders when updateCellStyle is called with null', () => {
+        renderer.createGrid();
+        const cell = renderer.getCellElement('A1');
+
+        // First apply a border style
+        renderer.updateCellStyle('A1', {
+            border: {
+                top: { style: 'solid', color: '#000000', width: 1 }
+            }
+        });
+
+        // Verify border was applied (color may be converted to rgb format)
+        expect(cell.style.borderTop).toMatch(/1px solid/);
+
+        // Now call updateCellStyle with null (simulating undo)
+        renderer.updateCellStyle('A1', null);
+
+        // Verify border was cleared
+        expect(cell.style.borderTop).toBe('');
+    });
+
+    it('should clear borders when updateCellStyle is called with style without borders', () => {
+        renderer.createGrid();
+        const cell = renderer.getCellElement('A1');
+
+        // First apply a border style
+        renderer.updateCellStyle('A1', {
+            border: {
+                top: { style: 'solid', color: '#000000', width: 1 }
+            }
+        });
+
+        // Verify border was applied (color may be converted to rgb format)
+        expect(cell.style.borderTop).toMatch(/1px solid/);
+
+        // Now call updateCellStyle with a style that has no borders
+        renderer.updateCellStyle('A1', { font: { bold: true } });
+
+        // Verify border was cleared
+        expect(cell.style.borderTop).toBe('');
+    });
 });
