@@ -128,12 +128,12 @@ export class FillHandle {
 
     // Determine which cell we're hovering over
     const cellElement = document.elementFromPoint(event.clientX, event.clientY);
-    if (!cellElement || !cellElement.dataset.cellId) {
+    if (!cellElement || !cellElement.dataset.id) {
       this._hidePreview();
       return;
     }
 
-    const cellId = cellElement.dataset.cellId;
+    const cellId = cellElement.dataset.id;
     const coords = this._cellIdToCoords(cellId);
 
     // Calculate target range based on drag direction
@@ -161,11 +161,11 @@ export class FillHandle {
 
     // Determine final target cell
     const cellElement = document.elementFromPoint(event.clientX, event.clientY);
-    if (!cellElement || !cellElement.dataset.cellId) {
+    if (!cellElement || !cellElement.dataset.id) {
       return null;
     }
 
-    const cellId = cellElement.dataset.cellId;
+    const cellId = cellElement.dataset.id;
     const coords = this._cellIdToCoords(cellId);
 
     // Calculate target range

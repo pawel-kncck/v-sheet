@@ -291,7 +291,7 @@ describe('FillHandle', () => {
       };
 
       const mockCell = document.createElement('div');
-      mockCell.dataset.cellId = 'A5';
+      mockCell.dataset.id = 'A5';
 
       global.document.elementFromPoint = vi.fn(() => mockCell);
 
@@ -311,7 +311,7 @@ describe('FillHandle', () => {
       };
 
       const mockCell = document.createElement('div');
-      mockCell.dataset.cellId = 'A1';
+      mockCell.dataset.id = 'A1';
 
       global.document.elementFromPoint = vi.fn(() => mockCell);
 
@@ -331,7 +331,7 @@ describe('FillHandle', () => {
       };
 
       const mockCell = document.createElement('div');
-      mockCell.dataset.cellId = 'E1';
+      mockCell.dataset.id = 'E1';
 
       global.document.elementFromPoint = vi.fn(() => mockCell);
 
@@ -351,7 +351,7 @@ describe('FillHandle', () => {
       };
 
       const mockCell = document.createElement('div');
-      mockCell.dataset.cellId = 'A1';
+      mockCell.dataset.id = 'A1';
 
       global.document.elementFromPoint = vi.fn(() => mockCell);
 
