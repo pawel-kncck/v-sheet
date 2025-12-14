@@ -30,21 +30,13 @@ import { CellHelpers } from '../engine/utils/CellHelpers.js';
 // ============================================================================
 
 /**
- * Operators that switch from Editing to Pointing state.
- * When user types these in editing state, we expect them to point to a cell next.
+ * Operators that trigger pointing state transitions.
+ * When user types these in editing state, we switch to pointing mode to expect a cell reference.
+ * When user types these in pointing state, we stay in pointing mode.
  * @readonly
  */
 export const POINTING_TRIGGERS = Object.freeze([
   '+', '-', '*', '/', '(', ',', ':', '<', '>', '=', '&', '^'
-]);
-
-/**
- * Operators that keep user in Pointing state after typing.
- * Includes closing paren which doesn't trigger pointing but should stay in formula mode.
- * @readonly
- */
-export const FORMULA_OPERATORS = Object.freeze([
-  '+', '-', '*', '/', '(', ')', ',', '^', '&', ':', '<', '>', '='
 ]);
 
 /**
@@ -255,39 +247,28 @@ export class FormulaMode extends NavigationMode {
    */
   _handleInput(context) {
     const { char } = context;
-    const isOperator = FORMULA_OPERATORS.includes(char);
-    const isPointingTrigger = POINTING_TRIGGERS.includes(char);
+    const isOperator = POINTING_TRIGGERS.includes(char);
 
-    if (this._isPointing) {
-      return this._handleInputInPointingState(char, isOperator);
-    } else {
-      return this._handleInputInEditingState(char, isPointingTrigger);
-    }
-  }
-
-  /**
-   * Handles input while in pointing state.
-   *
-   * @private
-   * @param {string} char - The character typed
-   * @param {boolean} isOperator - Whether it's a formula operator
-   * @returns {boolean}
-   */
-  _handleInputInPointingState(char, isOperator) {
     if (isOperator) {
-      // Append operator and stay in pointing state
+      // Operator typed - append, ensure pointing state, reset selection
       const currentValue = this._editorManager.getValue();
       const newValue = currentValue + char;
       this._editorManager.setValue(newValue);
       this._baseFormula = newValue;
 
-      // Reset selection back to formula cell for next navigation
-      this._resetSelectionToFormulaCell();
+      // Switch to pointing state if not already
+      if (!this._isPointing) {
+        this._isPointing = true;
+        this._updateModeDisplay();
+      }
 
-      Logger.log(this.getName(), `Operator "${char}" appended, staying in pointing state`);
+      this._resetSelectionToFormulaCell();
+      Logger.log(this.getName(), `Operator "${char}" → pointing state`);
       return true;
-    } else {
-      // Letter/number - append and switch to editing state
+    }
+
+    if (this._isPointing) {
+      // Non-operator in pointing state - append and switch to editing
       const currentValue = this._editorManager.getValue();
       this._editorManager.setValue(currentValue + char);
       this._isPointing = false;
@@ -296,35 +277,9 @@ export class FormulaMode extends NavigationMode {
       Logger.log(this.getName(), `Character "${char}" → editing state`);
       return true;
     }
-  }
 
-  /**
-   * Handles input while in editing state.
-   *
-   * @private
-   * @param {string} char - The character typed
-   * @param {boolean} isPointingTrigger - Whether it triggers pointing state
-   * @returns {boolean}
-   */
-  _handleInputInEditingState(char, isPointingTrigger) {
-    if (isPointingTrigger) {
-      // Append operator and switch to pointing state
-      const currentValue = this._editorManager.getValue();
-      const newValue = currentValue + char;
-      this._editorManager.setValue(newValue);
-      this._baseFormula = newValue;
-      this._isPointing = true;
-      this._updateModeDisplay();
-
-      // Reset selection for pointing
-      this._resetSelectionToFormulaCell();
-
-      Logger.log(this.getName(), `Operator "${char}" → pointing state`);
-      return true;
-    } else {
-      // Regular character - let browser handle
-      return false;
-    }
+    // Non-operator in editing state - let browser handle
+    return false;
   }
 
   // ============================================================================
@@ -580,7 +535,7 @@ export class FormulaMode extends NavigationMode {
    */
   _updateModeDisplay() {
     if (this._context.updateModeDisplay) {
-      const displayName = this._isPointing ? 'Point' : 'Formula Edit';
+      const displayName = this._isPointing ? 'Formula [Point]' : 'Formula [Edit]';
       this._context.updateModeDisplay(displayName);
     }
   }
