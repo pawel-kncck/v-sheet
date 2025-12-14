@@ -109,6 +109,12 @@ body {
   color: #0b57d0;
 }
 
+.toolbar-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .toolbar-btn svg {
   width: 18px;
   height: 18px;
@@ -572,6 +578,23 @@ body {
   box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3), /* Blue glow */
               0 4px 16px rgba(0, 0, 0, 0.15);      /* Subtle shadow for depth */
   border-radius: 2px; /* Slight rounding for modern look */
+
+  /* Contenteditable specific styles */
+  overflow: hidden;
+  line-height: 1.2;
+  min-height: 20px;
+  cursor: text;
+}
+
+/* Rich text spans within the editor */
+#cell-editor span {
+  /* Inherit font from parent by default */
+  white-space: pre; /* Preserve spaces */
+}
+
+/* Ensure consistent caret behavior */
+#cell-editor:focus {
+  outline: none;
 }
 
 .cell.editing {

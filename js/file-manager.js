@@ -444,6 +444,62 @@ class FileManager {
   }
 
   /**
+   * Get cell rich text runs
+   * @param {string} cellId
+   * @returns {Array|null} Rich text runs or null if none
+   */
+  getCellRichText(cellId) {
+    const cell = this.currentFile?.data?.cells?.[cellId];
+    if (!cell || !cell.richText) return null;
+
+    return cell.richText;
+  }
+
+  /**
+   * Update cell rich text runs
+   * @param {string} cellId
+   * @param {Array|null} richText - Rich text runs or null to clear
+   */
+  updateCellRichText(cellId, richText) {
+    if (!this.currentFile) return;
+
+    if (!this.currentFile.data.cells) {
+      this.currentFile.data.cells = {};
+    }
+
+    if (!this.currentFile.data.cells[cellId]) {
+      this.currentFile.data.cells[cellId] = {};
+    }
+
+    if (richText && richText.length > 0) {
+      // Process runs - convert inline styles to styleIds
+      const processedRuns = richText.map(run => {
+        const processedRun = {
+          start: run.start,
+          end: run.end
+        };
+
+        if (run.style && this.styleManager) {
+          // Convert inline style to styleId
+          processedRun.styleId = this.styleManager.addStyle(run.style);
+        } else if (run.styleId) {
+          processedRun.styleId = run.styleId;
+        }
+
+        return processedRun;
+      });
+
+      this.currentFile.data.cells[cellId].richText = processedRuns;
+    } else {
+      // Clear rich text
+      delete this.currentFile.data.cells[cellId].richText;
+    }
+
+    this.markAsModified();
+    this.queueAutosave();
+  }
+
+  /**
    * Update column widths
    */
   updateColumnWidths(columnWidths) {

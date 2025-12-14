@@ -92,11 +92,12 @@
 
     <!-- Main spreadsheet container -->
     <div id="spreadsheet-container">
-      <input
-        type="text"
+      <!-- WYSIWYG rich text editor (contenteditable div) -->
+      <div
         id="cell-editor"
+        contenteditable="true"
         style="position: absolute; display: none"
-      />
+      ></div>
       <div id="corner-cell" class="header-cell"></div>
       <div id="column-headers"></div>
       <div id="row-headers"></div>
