@@ -513,6 +513,7 @@ export class FormulaMode extends NavigationMode {
     const newFormula = this._baseFormula + reference;
     this._editorManager.setValue(newFormula);
     this._editorManager.setCursorPosition(newFormula.length);
+    this._context.formulaHighlighter._updateOverlays();
 
     Logger.log(this.getName(), `Updated formula with reference: ${reference}`);
   }
