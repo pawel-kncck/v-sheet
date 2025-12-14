@@ -254,16 +254,26 @@ Result: "Hello World" with runs:
 
 ---
 
-### Point Mode
+### Point Mode (Formula Mode)
 
 **Context:** User is building a formula with mouse/keyboard reference selection.
 
 **Formatting Behavior:**
-- Same as Enter mode (no text selection available)
-- Formula references should NOT be formatted (they're structural)
-- Active style only affects literal text portions
+- **Formatting is NOT allowed in Point mode**
+- Ctrl+B, Ctrl+I, and toolbar formatting buttons are **disabled/ignored**
+- Formula content is structural, not styled text
 
-**Note:** Formatting in formulas is atypical; spec may limit this.
+**Rationale:** Formulas are code, not prose. Applying formatting to formula syntax would be confusing and has no meaningful effect on the computed result.
+
+### Formula Cells (Display)
+
+**Context:** Cell contains a formula (e.g., `=SUM(A1:A10)`).
+
+**Formatting Behavior:**
+- The **formula source** cannot have text-level formatting
+- The **display value** (computed result) inherits **cell-level style only**
+- `richText` property is **ignored** for formula cells
+- User can apply cell-level formatting to change how the result appears
 
 ---
 
@@ -292,7 +302,31 @@ function resolveStyle(cellStyle, textRunStyle) {
 
 ## UI Components
 
-### Editor Changes
+### Formula Bar
+
+The formula bar is the primary location for text-level editing and formatting:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ [A1 ▼]  fx │ Hello World                                        │
+│            │ ^^^^^ (selected text can be formatted)             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Key Behaviors:**
+- Displays content of the **anchor cell** (active cell in selection)
+- Supports text selection for text-level formatting
+- Text selection in formula bar + Ctrl+B → formats selected text in anchor cell
+- Works in both Edit and Enter modes
+- Shows rich text with inline formatting (contenteditable)
+
+**Multi-Cell Selection Context:**
+- When multiple cells are selected, formula bar shows **anchor cell only**
+- Text-level formatting in formula bar applies to **anchor cell only**
+- Cell-level formatting (Ready mode) applies to **all selected cells**
+- Double-clicking any cell **cancels multi-cell selection** and enters Edit mode for that cell
+
+### In-Cell Editor Changes
 
 **Current:** Single `<input type="text">` element
 
@@ -312,18 +346,26 @@ function resolveStyle(cellStyle, textRunStyle) {
 - Apply inline styles to selection
 - Track active style for insertion point
 - Sync styles from cell on edit start
+- Sync with formula bar (both should show same content/selection)
+
+**In-Cell vs Formula Bar:**
+- Both support text selection and formatting
+- In-cell editor is positioned over the cell being edited
+- Formula bar is always visible at the top
+- Selection state should be synchronized between them
 
 ### Toolbar State
 
 Toolbar buttons should reflect:
 1. **Ready mode:** Cell-level style of active cell
-2. **Edit/Enter mode with selection:** Effective style of selected text
+2. **Edit/Enter mode with text selection:** Effective style of selected text
 3. **Edit/Enter mode without selection:** Active style (pending for new text)
+4. **Point mode:** Buttons disabled (no formatting allowed)
 
 **Visual Indicator:**
-- Solid button: Style is applied
-- Empty button: Style is not applied
-- Half/mixed state: Selection has mixed styles
+- Solid/pressed button: Style is applied
+- Empty/unpressed button: Style is not applied
+- Half/mixed state: Selection has mixed styles (optional enhancement)
 
 ---
 
@@ -416,12 +458,20 @@ renderCellContent(cell, cellElement) {
 
 ### 3. Paste Over Selection
 
-**Scenario:** User pastes plain text over formatted selection.
+**Scenario:** User pastes text over formatted selection.
 
-**Behavior:**
+**Behavior (Internal Paste - from v-sheet):**
+- Pasted text preserves its original formatting runs
+- Surrounding runs in target cell remain intact
+- Re-normalize runs after paste (merge adjacent identical runs)
+
+**Behavior (External Paste - from Word, web, etc.):**
+- **Strip all formatting** - paste as plain text only
 - Pasted text inherits active style (or cell style if none)
 - Surrounding runs remain intact
 - Re-normalize runs after paste
+
+**Future Enhancement:** Add formatting translation layer to preserve styles from external sources (requires mapping external formats to v-sheet style properties).
 
 ### 4. Copy Rich Text
 
@@ -429,16 +479,19 @@ renderCellContent(cell, cellElement) {
 
 **Behavior:**
 - Copy both plain text (for external apps) and rich format (internal)
-- Clipboard contains both text/plain and application/vsheet-richtext MIME types
+- Clipboard contains both `text/plain` and `application/vsheet-richtext` MIME types
+- Internal paste uses rich format; external paste uses plain text
 
 ### 5. Formula Cells
 
 **Scenario:** Cell contains formula.
 
 **Behavior:**
-- Formula source (=SUM(A1:A10)) is NOT formatted
-- Display value CAN have cell-level formatting
-- richText does NOT apply to formula cells (only to literal text)
+- Formula source (`=SUM(A1:A10)`) **cannot be formatted**
+- Formatting controls are **disabled in Point mode**
+- Display value (computed result) uses **cell-level style only**
+- `richText` property is **ignored** for formula cells
+- User can apply cell-level formatting in Ready mode to style the result
 
 ### 6. Empty Cell Formatting
 
@@ -448,6 +501,32 @@ renderCellContent(cell, cellElement) {
 - Cell-level style is set
 - New text inherits from cell-level style
 - No richText runs created (all text is uniform)
+
+### 7. Multi-Cell Selection with Text-Level Formatting
+
+**Scenario:** User has A1:C3 selected (9 cells), wants to format part of text in A1.
+
+**Behavior:**
+- User must use **formula bar** to select text (shows anchor cell A1 content)
+- Text selection in formula bar + Ctrl+B → formats only selected text in A1
+- Other cells (A2, A3, B1, etc.) are **not affected**
+- To format all cells: use Ready mode cell-level formatting instead
+
+**Alternative Flow:**
+- User double-clicks A1 → **cancels multi-cell selection**
+- Selection becomes just A1, user is in Edit mode
+- Now can select text in-cell or in formula bar
+- Formatting applies to A1 only
+
+### 8. Entering Edit Mode Preserves Selection
+
+**Scenario:** User has A1:C3 selected, presses F2 to enter Edit mode.
+
+**Behavior:**
+- Multi-cell selection is **preserved**
+- Formula bar shows anchor cell content
+- User can edit/format text in anchor cell
+- Tab/Enter commits edit and may advance anchor within selection
 
 ---
 
@@ -500,17 +579,28 @@ Backend API unchanged:
 
 ---
 
+## Resolved Design Decisions
+
+1. **Formula cells:** Formula content cannot be formatted. Display values inherit cell-level style only. Formatting controls are disabled in Point mode.
+
+2. **External paste:** Strip all formatting from external sources. Paste as plain text inheriting active/cell style. Future enhancement may add format translation.
+
+3. **Multi-cell selection formatting:**
+   - Cell-level formatting (Ready mode) applies to all selected cells
+   - Text-level formatting requires text selection in formula bar, applies to anchor cell only
+   - Double-clicking a cell cancels multi-cell selection and enters Edit mode for that cell
+
+---
+
 ## Open Questions
 
-1. **Formula cells:** Should formula results support text-level formatting? (Proposed: No)
+1. **Performance:** Large cells with many runs - need run coalescing/limits?
 
-2. **Performance:** Large cells with many runs - need run coalescing/limits?
+2. **Keyboard navigation in editor:** How does cursor movement interact with run boundaries?
 
-3. **External paste:** When pasting from Word/web, preserve formatting or strip?
+3. **Formula bar implementation:** Does v-sheet currently have a formula bar, or does this need to be built?
 
-4. **Keyboard navigation in editor:** How does cursor movement interact with run boundaries?
-
-5. **Multi-cell selection formatting:** In Edit mode with multi-cell selection, what happens?
+4. **Run normalization:** When should adjacent identical runs be merged? On every edit, or lazily on save?
 
 ---
 
