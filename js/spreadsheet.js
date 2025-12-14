@@ -28,7 +28,7 @@ import { ModeManager } from './modes/ModeManager.js';
 import { ReadyMode } from './modes/ReadyMode.js';
 import { EditMode } from './modes/EditMode.js';
 import { EnterMode } from './modes/EnterMode.js';
-import { PointMode } from './modes/PointMode.js';
+import { FormulaMode } from './modes/FormulaMode.js';
 import { INTENTS, createEditStartContext } from './modes/Intents.js';
 
 // Status Bar
@@ -107,7 +107,7 @@ export class Spreadsheet {
     this.modeManager.registerMode('ready', ReadyMode);
     this.modeManager.registerMode('edit', EditMode);
     this.modeManager.registerMode('enter', EnterMode);
-    this.modeManager.registerMode('point', PointMode);
+    this.modeManager.registerMode('formula', FormulaMode);
 
     // Create grid first (so cellGridContainer exists)
     this.renderer.createGrid();
