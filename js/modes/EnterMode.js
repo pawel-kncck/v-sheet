@@ -148,9 +148,23 @@ export class EnterMode extends NavigationMode {
         // In EnterMode, let contenteditable handle deletion
         return false;
 
+      // Clipboard operations - let contenteditable handle them
+      case INTENTS.COPY:
+      case INTENTS.PASTE:
+      case INTENTS.CUT:
+        return false;
+
+      // Select all - let contenteditable select text, not cells
+      case INTENTS.SELECT_ALL:
+        return false;
+
+      // Undo/Redo - let contenteditable handle text undo, not spreadsheet undo
+      case INTENTS.UNDO:
+      case INTENTS.REDO:
+        return false;
+
       default:
         // Delegate to NavigationMode parent for other intents
-        // (Copy, Paste, Undo, etc.)
         return super.handleIntent(intent, context);
     }
   }

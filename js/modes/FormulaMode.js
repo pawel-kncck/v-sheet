@@ -187,6 +187,21 @@ export class FormulaMode extends NavigationMode {
         Logger.log(this.getName(), 'Formatting ignored in Formula mode');
         return true; // Consume the event but do nothing
 
+      // Clipboard operations - let contenteditable handle them
+      case INTENTS.COPY:
+      case INTENTS.PASTE:
+      case INTENTS.CUT:
+        return false;
+
+      // Select all - let contenteditable select formula text, not cells
+      case INTENTS.SELECT_ALL:
+        return false;
+
+      // Undo/Redo - let contenteditable handle text undo, not spreadsheet undo
+      case INTENTS.UNDO:
+      case INTENTS.REDO:
+        return false;
+
       default:
         return super.handleIntent(intent, context);
     }

@@ -788,36 +788,76 @@ export class EditorManager {
    * @private
    */
   _selectionHasFormatting(range, styleChanges) {
-    const container = range.commonAncestorContainer;
+    // Clone the range to avoid modifying the actual selection
+    const testRange = range.cloneRange();
+    const fragment = testRange.cloneContents();
 
-    // Get the element (if container is text node, get parent)
-    const element = container.nodeType === Node.TEXT_NODE
-      ? container.parentElement
-      : container;
+    // Check all elements in the selection
+    const walker = document.createTreeWalker(
+      fragment,
+      NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+      null
+    );
 
-    if (!element) return false;
+    let hasFormatting = false;
+    let node;
 
-    // Check if the formatting property is already applied
-    for (const prop in styleChanges) {
-      if (prop === 'bold') {
-        const fontWeight = window.getComputedStyle(element).fontWeight;
-        if (fontWeight === 'bold' || fontWeight === '700') return true;
+    // If we have only text nodes (no spans), check the parent element
+    const firstChild = fragment.firstChild;
+    if (firstChild && firstChild.nodeType === Node.TEXT_NODE && !fragment.querySelector('span')) {
+      // Plain text - check parent
+      const container = range.commonAncestorContainer;
+      const element = container.nodeType === Node.TEXT_NODE
+        ? container.parentElement
+        : container;
+
+      if (element && element !== this.cellEditor) {
+        for (const prop in styleChanges) {
+          if (prop === 'bold') {
+            const fontWeight = window.getComputedStyle(element).fontWeight;
+            if (fontWeight === 'bold' || fontWeight === '700') {
+              hasFormatting = true;
+              break;
+            }
+          }
+          if (prop === 'italic') {
+            const fontStyle = window.getComputedStyle(element).fontStyle;
+            if (fontStyle === 'italic') {
+              hasFormatting = true;
+              break;
+            }
+          }
+        }
       }
-      if (prop === 'italic') {
-        const fontStyle = window.getComputedStyle(element).fontStyle;
-        if (fontStyle === 'italic') return true;
-      }
-      if (prop === 'underline') {
-        const textDecoration = window.getComputedStyle(element).textDecoration;
-        if (textDecoration.includes('underline')) return true;
-      }
-      if (prop === 'strikethrough') {
-        const textDecoration = window.getComputedStyle(element).textDecoration;
-        if (textDecoration.includes('line-through')) return true;
+      return hasFormatting;
+    }
+
+    // Check all span elements in the selection
+    while (node = walker.nextNode()) {
+      if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SPAN') {
+        for (const prop in styleChanges) {
+          if (prop === 'bold' && node.style.fontWeight === 'bold') {
+            hasFormatting = true;
+            break;
+          }
+          if (prop === 'italic' && node.style.fontStyle === 'italic') {
+            hasFormatting = true;
+            break;
+          }
+          if (prop === 'underline' && node.style.textDecoration && node.style.textDecoration.includes('underline')) {
+            hasFormatting = true;
+            break;
+          }
+          if (prop === 'strikethrough' && node.style.textDecoration && node.style.textDecoration.includes('line-through')) {
+            hasFormatting = true;
+            break;
+          }
+        }
+        if (hasFormatting) break;
       }
     }
 
-    return false;
+    return hasFormatting;
   }
 
   /**
@@ -836,19 +876,16 @@ export class EditorManager {
     // Re-insert the fragment
     range.insertNode(fragment);
 
-    // Normalize to clean up
+    // Normalize to merge adjacent text nodes
     this.cellEditor.normalize();
 
-    // Restore selection to the modified content
-    try {
-      const newRange = document.createRange();
-      newRange.selectNodeContents(fragment.firstChild || this.cellEditor);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    } catch (e) {
-      // Fallback: just collapse selection
-      selection.removeAllRanges();
-    }
+    // Collapse cursor to the end of where we just inserted
+    // Don't try to restore the selection - just place cursor after the modified text
+    const newRange = document.createRange();
+    newRange.setStartAfter(fragment.lastChild || fragment);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
   }
 
   /**
@@ -856,21 +893,11 @@ export class EditorManager {
    * @private
    */
   _removeStyleFromFragment(fragment, styleChanges) {
-    const walker = document.createTreeWalker(
-      fragment,
-      NodeFilter.SHOW_ELEMENT,
-      null
-    );
-
-    const spans = [];
-    let node;
-    while (node = walker.nextNode()) {
-      if (node.tagName === 'SPAN') {
-        spans.push(node);
-      }
-    }
+    // Get all spans in the fragment
+    const spans = Array.from(fragment.querySelectorAll('span'));
 
     spans.forEach(span => {
+      // Remove the requested style properties
       for (const prop in styleChanges) {
         if (prop === 'bold') {
           span.style.fontWeight = '';
@@ -878,20 +905,35 @@ export class EditorManager {
         if (prop === 'italic') {
           span.style.fontStyle = '';
         }
-        if (prop === 'underline' || prop === 'strikethrough') {
-          span.style.textDecoration = '';
+        if (prop === 'underline') {
+          // Remove underline but preserve strikethrough if present
+          const decorations = span.style.textDecoration.split(' ').filter(d => d !== 'underline');
+          span.style.textDecoration = decorations.join(' ');
+        }
+        if (prop === 'strikethrough') {
+          // Remove strikethrough but preserve underline if present
+          const decorations = span.style.textDecoration.split(' ').filter(d => d !== 'line-through');
+          span.style.textDecoration = decorations.join(' ');
         }
         if (prop === 'color') {
           span.style.color = '';
         }
+        if (prop === 'size') {
+          span.style.fontSize = '';
+        }
+        if (prop === 'family') {
+          span.style.fontFamily = '';
+        }
       }
 
-      // If span has no more styles, unwrap it
+      // If span has no more inline styles, unwrap it
       if (!span.style.cssText || span.style.cssText.trim() === '') {
+        // Replace span with its children
+        const parent = span.parentNode;
         while (span.firstChild) {
-          span.parentNode.insertBefore(span.firstChild, span);
+          parent.insertBefore(span.firstChild, span);
         }
-        span.remove();
+        parent.removeChild(span);
       }
     });
   }
