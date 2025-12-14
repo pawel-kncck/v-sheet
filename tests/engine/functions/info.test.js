@@ -23,6 +23,13 @@ describe('Information Functions', () => {
       ISERROR: registry.get('ISERROR').bind(mockEvaluator),
       ISNUMBER: registry.get('ISNUMBER').bind(mockEvaluator),
       ISTEXT: registry.get('ISTEXT').bind(mockEvaluator),
+      // Medium priority
+      ISNA: registry.get('ISNA').bind(mockEvaluator),
+      ISLOGICAL: registry.get('ISLOGICAL').bind(mockEvaluator),
+      NA: registry.get('NA').bind(mockEvaluator),
+      ISEVEN: registry.get('ISEVEN').bind(mockEvaluator),
+      ISODD: registry.get('ISODD').bind(mockEvaluator),
+      TYPE: registry.get('TYPE').bind(mockEvaluator),
     };
   });
 
@@ -156,6 +163,108 @@ describe('Information Functions', () => {
     it('should return FALSE for null and undefined', () => {
       expect(funcs.ISTEXT(null)).toBe(false);
       expect(funcs.ISTEXT(undefined)).toBe(false);
+    });
+  });
+
+  // ============================================
+  // MEDIUM PRIORITY INFO FUNCTION TESTS
+  // ============================================
+
+  describe('ISNA', () => {
+    it('should return TRUE for #N/A string', () => {
+      expect(funcs.ISNA('#N/A')).toBe(true);
+      expect(funcs.ISNA('#n/a')).toBe(true);
+    });
+
+    it('should return TRUE for NotAvailableError', () => {
+      expect(funcs.ISNA(new NotAvailableError())).toBe(true);
+    });
+
+    it('should return FALSE for other errors', () => {
+      expect(funcs.ISNA('#DIV/0!')).toBe(false);
+      expect(funcs.ISNA('#VALUE!')).toBe(false);
+    });
+
+    it('should return FALSE for regular values', () => {
+      expect(funcs.ISNA(123)).toBe(false);
+      expect(funcs.ISNA('hello')).toBe(false);
+    });
+  });
+
+  describe('ISLOGICAL', () => {
+    it('should return TRUE for boolean values', () => {
+      expect(funcs.ISLOGICAL(true)).toBe(true);
+      expect(funcs.ISLOGICAL(false)).toBe(true);
+    });
+
+    it('should return FALSE for non-boolean values', () => {
+      expect(funcs.ISLOGICAL(1)).toBe(false);
+      expect(funcs.ISLOGICAL(0)).toBe(false);
+      expect(funcs.ISLOGICAL('true')).toBe(false);
+    });
+  });
+
+  describe('NA', () => {
+    it('should throw NotAvailableError', () => {
+      expect(() => funcs.NA()).toThrow(NotAvailableError);
+    });
+  });
+
+  describe('ISEVEN', () => {
+    it('should return TRUE for even numbers', () => {
+      expect(funcs.ISEVEN(2)).toBe(true);
+      expect(funcs.ISEVEN(0)).toBe(true);
+      expect(funcs.ISEVEN(-4)).toBe(true);
+    });
+
+    it('should return FALSE for odd numbers', () => {
+      expect(funcs.ISEVEN(1)).toBe(false);
+      expect(funcs.ISEVEN(3)).toBe(false);
+      expect(funcs.ISEVEN(-5)).toBe(false);
+    });
+
+    it('should floor decimal numbers', () => {
+      expect(funcs.ISEVEN(2.9)).toBe(true);
+      expect(funcs.ISEVEN(3.9)).toBe(false);
+    });
+  });
+
+  describe('ISODD', () => {
+    it('should return TRUE for odd numbers', () => {
+      expect(funcs.ISODD(1)).toBe(true);
+      expect(funcs.ISODD(3)).toBe(true);
+      expect(funcs.ISODD(-5)).toBe(true);
+    });
+
+    it('should return FALSE for even numbers', () => {
+      expect(funcs.ISODD(2)).toBe(false);
+      expect(funcs.ISODD(0)).toBe(false);
+      expect(funcs.ISODD(-4)).toBe(false);
+    });
+  });
+
+  describe('TYPE', () => {
+    it('should return 1 for numbers', () => {
+      expect(funcs.TYPE(123)).toBe(1);
+      expect(funcs.TYPE(3.14)).toBe(1);
+    });
+
+    it('should return 2 for text', () => {
+      expect(funcs.TYPE('hello')).toBe(2);
+    });
+
+    it('should return 4 for logical values', () => {
+      expect(funcs.TYPE(true)).toBe(4);
+      expect(funcs.TYPE(false)).toBe(4);
+    });
+
+    it('should return 16 for error values', () => {
+      expect(funcs.TYPE('#DIV/0!')).toBe(16);
+      expect(funcs.TYPE(new DivZeroError())).toBe(16);
+    });
+
+    it('should return 64 for arrays', () => {
+      expect(funcs.TYPE([1, 2, 3])).toBe(64);
     });
   });
 });

@@ -9,7 +9,7 @@
  * giving us access to `this.coerce` and other utilities.
  */
 
-import { ValueError, NumError, DivZeroError } from '../utils/FormulaErrors.js';
+import { ValueError, NumError, DivZeroError, NotAvailableError } from '../utils/FormulaErrors.js';
 
 /**
  * SUM: Adds all numbers in a range of cells.
@@ -525,6 +525,395 @@ function MEDIAN(...args) {
   }
 }
 
+// ============================================
+// MEDIUM PRIORITY MATH FUNCTIONS
+// ============================================
+
+/**
+ * ROUNDUP: Rounds a number up, away from zero.
+ *
+ * @param {*} number - The number to round.
+ * @param {*} [num_digits=0] - The number of decimal places.
+ * @returns {number} The rounded number.
+ */
+function ROUNDUP(number, num_digits = 0) {
+  const num = this.coerce.toNumber(number);
+  const digits = this.coerce.toNumber(num_digits);
+  const multiplier = Math.pow(10, Math.floor(digits));
+
+  if (num >= 0) {
+    return Math.ceil(num * multiplier) / multiplier;
+  } else {
+    return Math.floor(num * multiplier) / multiplier;
+  }
+}
+
+/**
+ * ROUNDDOWN: Rounds a number down, toward zero.
+ *
+ * @param {*} number - The number to round.
+ * @param {*} [num_digits=0] - The number of decimal places.
+ * @returns {number} The rounded number.
+ */
+function ROUNDDOWN(number, num_digits = 0) {
+  const num = this.coerce.toNumber(number);
+  const digits = this.coerce.toNumber(num_digits);
+  const multiplier = Math.pow(10, Math.floor(digits));
+
+  if (num >= 0) {
+    return Math.floor(num * multiplier) / multiplier;
+  } else {
+    return Math.ceil(num * multiplier) / multiplier;
+  }
+}
+
+/**
+ * TRUNC: Truncates a number to an integer by removing the decimal part.
+ *
+ * @param {*} number - The number to truncate.
+ * @param {*} [num_digits=0] - The number of decimal places to keep.
+ * @returns {number} The truncated number.
+ */
+function TRUNC(number, num_digits = 0) {
+  const num = this.coerce.toNumber(number);
+  const digits = this.coerce.toNumber(num_digits);
+  const multiplier = Math.pow(10, Math.floor(digits));
+
+  return Math.trunc(num * multiplier) / multiplier;
+}
+
+/**
+ * SIGN: Returns the sign of a number (-1, 0, or 1).
+ *
+ * @param {*} number - The number to check.
+ * @returns {number} -1 if negative, 0 if zero, 1 if positive.
+ */
+function SIGN(number) {
+  const num = this.coerce.toNumber(number);
+  return Math.sign(num);
+}
+
+/**
+ * RAND: Returns a random number between 0 (inclusive) and 1 (exclusive).
+ *
+ * @returns {number} A random number.
+ */
+function RAND() {
+  return Math.random();
+}
+
+/**
+ * RANDBETWEEN: Returns a random integer between two values (inclusive).
+ *
+ * @param {*} bottom - The minimum value.
+ * @param {*} top - The maximum value.
+ * @returns {number} A random integer.
+ * @throws {NumError} If bottom > top.
+ */
+function RANDBETWEEN(bottom, top) {
+  const min = Math.ceil(this.coerce.toNumber(bottom));
+  const max = Math.floor(this.coerce.toNumber(top));
+
+  if (min > max) {
+    throw new NumError('RANDBETWEEN: bottom must be less than or equal to top');
+  }
+
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/**
+ * COUNTBLANK: Counts empty cells in a range.
+ *
+ * @param {...any} args - The range(s) to check.
+ * @returns {number} The count of blank cells.
+ */
+function COUNTBLANK(...args) {
+  const values = args.flat(Infinity);
+  return values.filter(v => v === null || v === undefined || v === '').length;
+}
+
+/**
+ * AVERAGEIF: Calculates the average of cells that meet a criterion.
+ *
+ * @param {Array} range - The range to evaluate.
+ * @param {*} criteria - The condition to test.
+ * @param {Array} [average_range] - Optional. The range to average.
+ * @returns {number} The average of matching values.
+ * @throws {DivZeroError} If no cells match the criteria.
+ */
+function AVERAGEIF(range, criteria, average_range) {
+  let criteriaRange = range;
+  let avgRange = average_range;
+
+  if (avgRange === undefined) {
+    avgRange = criteriaRange;
+  }
+
+  const criteriaValues = Array.isArray(criteriaRange) ? criteriaRange.flat(Infinity) : [criteriaRange];
+  const avgValues = Array.isArray(avgRange) ? avgRange.flat(Infinity) : [avgRange];
+
+  if (criteriaValues.length !== avgValues.length) {
+    throw new ValueError('AVERAGEIF ranges must be the same size');
+  }
+
+  const criteriaTest = this._parseCriteria(criteria);
+
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < criteriaValues.length; i++) {
+    if (criteriaTest(criteriaValues[i])) {
+      sum += this.coerce.toNumber(avgValues[i]);
+      count++;
+    }
+  }
+
+  if (count === 0) {
+    throw new DivZeroError('No cells match the criteria in AVERAGEIF');
+  }
+
+  return sum / count;
+}
+
+/**
+ * MODE: Returns the most frequently occurring value.
+ *
+ * @param {...any} args - The values to check.
+ * @returns {number} The most common value.
+ * @throws {NotAvailableError} If no duplicate values exist.
+ */
+function MODE(...args) {
+  const values = args.flat(Infinity);
+
+  const numbers = values.filter(v => {
+    if (typeof v === 'number') return true;
+    if (typeof v === 'string' && v !== '') {
+      const num = parseFloat(v);
+      return !isNaN(num) && /^-?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i.test(v.trim());
+    }
+    return false;
+  }).map(v => this.coerce.toNumber(v));
+
+  if (numbers.length === 0) {
+    throw new NotAvailableError('MODE requires numeric values');
+  }
+
+  // Count occurrences
+  const counts = new Map();
+  for (const num of numbers) {
+    counts.set(num, (counts.get(num) || 0) + 1);
+  }
+
+  // Find the mode
+  let maxCount = 0;
+  let mode = null;
+  for (const [value, count] of counts) {
+    if (count > maxCount) {
+      maxCount = count;
+      mode = value;
+    }
+  }
+
+  if (maxCount <= 1) {
+    throw new NotAvailableError('No repeated values in MODE');
+  }
+
+  return mode;
+}
+
+/**
+ * STDEV: Calculates standard deviation based on a sample.
+ *
+ * @param {...any} args - The sample values.
+ * @returns {number} The standard deviation.
+ * @throws {DivZeroError} If fewer than 2 values.
+ */
+function STDEV(...args) {
+  const values = args.flat(Infinity);
+
+  const numbers = values.filter(v => {
+    if (typeof v === 'number') return true;
+    if (typeof v === 'string' && v !== '') {
+      const num = parseFloat(v);
+      return !isNaN(num) && /^-?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i.test(v.trim());
+    }
+    return false;
+  }).map(v => this.coerce.toNumber(v));
+
+  if (numbers.length < 2) {
+    throw new DivZeroError('STDEV requires at least 2 values');
+  }
+
+  const mean = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+  const squaredDiffs = numbers.map(x => Math.pow(x - mean, 2));
+  const variance = squaredDiffs.reduce((a, b) => a + b, 0) / (numbers.length - 1);
+
+  return Math.sqrt(variance);
+}
+
+/**
+ * VAR: Calculates variance based on a sample.
+ *
+ * @param {...any} args - The sample values.
+ * @returns {number} The variance.
+ * @throws {DivZeroError} If fewer than 2 values.
+ */
+function VAR(...args) {
+  const values = args.flat(Infinity);
+
+  const numbers = values.filter(v => {
+    if (typeof v === 'number') return true;
+    if (typeof v === 'string' && v !== '') {
+      const num = parseFloat(v);
+      return !isNaN(num) && /^-?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i.test(v.trim());
+    }
+    return false;
+  }).map(v => this.coerce.toNumber(v));
+
+  if (numbers.length < 2) {
+    throw new DivZeroError('VAR requires at least 2 values');
+  }
+
+  const mean = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+  const squaredDiffs = numbers.map(x => Math.pow(x - mean, 2));
+
+  return squaredDiffs.reduce((a, b) => a + b, 0) / (numbers.length - 1);
+}
+
+// ============================================
+// LOW PRIORITY MATH FUNCTIONS
+// ============================================
+
+/**
+ * PI: Returns the value of π (pi).
+ *
+ * @returns {number} The value of π.
+ */
+function PI() {
+  return Math.PI;
+}
+
+/**
+ * EXP: Returns e raised to a power.
+ *
+ * @param {*} number - The exponent.
+ * @returns {number} e^number.
+ */
+function EXP(number) {
+  const num = this.coerce.toNumber(number);
+  return Math.exp(num);
+}
+
+/**
+ * LN: Returns the natural logarithm of a number.
+ *
+ * @param {*} number - The positive number.
+ * @returns {number} The natural logarithm.
+ * @throws {NumError} If number <= 0.
+ */
+function LN(number) {
+  const num = this.coerce.toNumber(number);
+
+  if (num <= 0) {
+    throw new NumError('LN requires a positive number');
+  }
+
+  return Math.log(num);
+}
+
+/**
+ * LOG: Returns the logarithm of a number to a specified base.
+ *
+ * @param {*} number - The positive number.
+ * @param {*} [base=10] - The base of the logarithm.
+ * @returns {number} The logarithm.
+ * @throws {NumError} If number <= 0 or base <= 0.
+ */
+function LOG(number, base = 10) {
+  const num = this.coerce.toNumber(number);
+  const b = this.coerce.toNumber(base);
+
+  if (num <= 0) {
+    throw new NumError('LOG requires a positive number');
+  }
+  if (b <= 0 || b === 1) {
+    throw new NumError('LOG requires a positive base other than 1');
+  }
+
+  return Math.log(num) / Math.log(b);
+}
+
+/**
+ * LOG10: Returns the base-10 logarithm of a number.
+ *
+ * @param {*} number - The positive number.
+ * @returns {number} The base-10 logarithm.
+ * @throws {NumError} If number <= 0.
+ */
+function LOG10(number) {
+  const num = this.coerce.toNumber(number);
+
+  if (num <= 0) {
+    throw new NumError('LOG10 requires a positive number');
+  }
+
+  return Math.log10(num);
+}
+
+/**
+ * SIN: Returns the sine of an angle (in radians).
+ *
+ * @param {*} number - The angle in radians.
+ * @returns {number} The sine.
+ */
+function SIN(number) {
+  const num = this.coerce.toNumber(number);
+  return Math.sin(num);
+}
+
+/**
+ * COS: Returns the cosine of an angle (in radians).
+ *
+ * @param {*} number - The angle in radians.
+ * @returns {number} The cosine.
+ */
+function COS(number) {
+  const num = this.coerce.toNumber(number);
+  return Math.cos(num);
+}
+
+/**
+ * TAN: Returns the tangent of an angle (in radians).
+ *
+ * @param {*} number - The angle in radians.
+ * @returns {number} The tangent.
+ */
+function TAN(number) {
+  const num = this.coerce.toNumber(number);
+  return Math.tan(num);
+}
+
+/**
+ * DEGREES: Converts radians to degrees.
+ *
+ * @param {*} angle - The angle in radians.
+ * @returns {number} The angle in degrees.
+ */
+function DEGREES(angle) {
+  const rad = this.coerce.toNumber(angle);
+  return rad * (180 / Math.PI);
+}
+
+/**
+ * RADIANS: Converts degrees to radians.
+ *
+ * @param {*} angle - The angle in degrees.
+ * @returns {number} The angle in radians.
+ */
+function RADIANS(angle) {
+  const deg = this.coerce.toNumber(angle);
+  return deg * (Math.PI / 180);
+}
+
 // Export all functions as an object
 export const mathFunctions = {
   SUM,
@@ -546,5 +935,28 @@ export const mathFunctions = {
   PRODUCT,
   COUNTIF,
   MEDIAN,
+  // Medium priority
+  ROUNDUP,
+  ROUNDDOWN,
+  TRUNC,
+  SIGN,
+  RAND,
+  RANDBETWEEN,
+  COUNTBLANK,
+  AVERAGEIF,
+  MODE,
+  STDEV,
+  VAR,
+  // Low priority
+  PI,
+  EXP,
+  LN,
+  LOG,
+  LOG10,
+  SIN,
+  COS,
+  TAN,
+  DEGREES,
+  RADIANS,
   _parseCriteria, // Export for testing
 };

@@ -25,6 +25,11 @@ describe('Lookup Functions', () => {
       HLOOKUP: registry.get('HLOOKUP').bind(mockEvaluator),
       INDEX: registry.get('INDEX').bind(mockEvaluator),
       MATCH: registry.get('MATCH').bind(mockEvaluator),
+      // Medium priority
+      ROW: registry.get('ROW').bind(mockEvaluator),
+      COLUMN: registry.get('COLUMN').bind(mockEvaluator),
+      ROWS: registry.get('ROWS').bind(mockEvaluator),
+      COLUMNS: registry.get('COLUMNS').bind(mockEvaluator),
     };
   });
 
@@ -285,6 +290,66 @@ describe('Lookup Functions', () => {
 
     it('should throw error for invalid match_type', () => {
       expect(() => funcs.MATCH(1, [1, 2], 2)).toThrow(ValueError);
+    });
+  });
+
+  // ============================================
+  // MEDIUM PRIORITY LOOKUP FUNCTION TESTS
+  // ============================================
+
+  describe('ROW', () => {
+    it('should return 1 for no argument', () => {
+      expect(funcs.ROW()).toBe(1);
+    });
+
+    it('should return row numbers for array', () => {
+      expect(funcs.ROW([[1, 2], [3, 4], [5, 6]])).toEqual([1, 2, 3]);
+    });
+
+    it('should return 1 for single value', () => {
+      expect(funcs.ROW(42)).toBe(1);
+    });
+  });
+
+  describe('COLUMN', () => {
+    it('should return 1 for no argument', () => {
+      expect(funcs.COLUMN()).toBe(1);
+    });
+
+    it('should return column numbers for 2D array', () => {
+      expect(funcs.COLUMN([[1, 2, 3], [4, 5, 6]])).toEqual([1, 2, 3]);
+    });
+
+    it('should return 1 for single value', () => {
+      expect(funcs.COLUMN(42)).toBe(1);
+    });
+  });
+
+  describe('ROWS', () => {
+    it('should return number of rows in 2D array', () => {
+      expect(funcs.ROWS([[1, 2], [3, 4], [5, 6]])).toBe(3);
+    });
+
+    it('should return length for 1D array', () => {
+      expect(funcs.ROWS([1, 2, 3, 4])).toBe(4);
+    });
+
+    it('should return 1 for single value', () => {
+      expect(funcs.ROWS(42)).toBe(1);
+    });
+  });
+
+  describe('COLUMNS', () => {
+    it('should return number of columns in 2D array', () => {
+      expect(funcs.COLUMNS([[1, 2, 3], [4, 5, 6]])).toBe(3);
+    });
+
+    it('should return length for 1D array', () => {
+      expect(funcs.COLUMNS([1, 2, 3, 4])).toBe(4);
+    });
+
+    it('should return 1 for single value', () => {
+      expect(funcs.COLUMNS(42)).toBe(1);
     });
   });
 });

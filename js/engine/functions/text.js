@@ -409,6 +409,170 @@ function VALUE(text) {
   return num;
 }
 
+// ============================================
+// MEDIUM PRIORITY TEXT FUNCTIONS
+// ============================================
+
+/**
+ * REPT: Repeats text a given number of times.
+ *
+ * @param {*} text - The text to repeat.
+ * @param {*} number_times - The number of times to repeat.
+ * @returns {string} The repeated text.
+ * @throws {ValueError} If number_times is negative.
+ */
+function REPT(text, number_times) {
+  const str = this.coerce.toString(text);
+  const times = this.coerce.toNumber(number_times);
+
+  if (times < 0) {
+    throw new ValueError('number_times must be non-negative');
+  }
+
+  return str.repeat(Math.floor(times));
+}
+
+/**
+ * PROPER: Capitalizes the first letter of each word in a text string.
+ *
+ * @param {*} text - The text to convert.
+ * @returns {string} The text with proper capitalization.
+ */
+function PROPER(text) {
+  const str = this.coerce.toString(text);
+  return str.replace(/\w\S*/g, (word) => {
+    return word.charAt(0).toUpperCase() + word.substr(1).toLowerCase();
+  });
+}
+
+/**
+ * EXACT: Checks whether two text strings are exactly the same (case-sensitive).
+ *
+ * @param {*} text1 - The first text string.
+ * @param {*} text2 - The second text string.
+ * @returns {boolean} TRUE if the strings are identical, FALSE otherwise.
+ */
+function EXACT(text1, text2) {
+  const str1 = this.coerce.toString(text1);
+  const str2 = this.coerce.toString(text2);
+  return str1 === str2;
+}
+
+/**
+ * TEXTJOIN: Joins text strings with a delimiter.
+ *
+ * @param {*} delimiter - The text to insert between each text string.
+ * @param {*} ignore_empty - If TRUE, ignores empty strings.
+ * @param {...any} args - The text strings to join.
+ * @returns {string} The joined text.
+ */
+function TEXTJOIN(delimiter, ignore_empty, ...args) {
+  const delim = this.coerce.toString(delimiter);
+  const ignoreEmpty = this.coerce.toBoolean(ignore_empty);
+
+  // Flatten all arguments
+  const values = args.flat(Infinity);
+
+  // Convert to strings and optionally filter empty
+  let strings = values.map(v => this.coerce.toString(v));
+
+  if (ignoreEmpty) {
+    strings = strings.filter(s => s !== '');
+  }
+
+  return strings.join(delim);
+}
+
+/**
+ * SPLIT: Splits text by a delimiter into an array.
+ * Note: This is a Google Sheets function, not in Excel.
+ *
+ * @param {*} text - The text to split.
+ * @param {*} delimiter - The character(s) to split by.
+ * @param {*} [split_by_each=false] - If TRUE, splits by each character in delimiter.
+ * @returns {Array} An array of strings.
+ */
+function SPLIT(text, delimiter, split_by_each = false) {
+  const str = this.coerce.toString(text);
+  const delim = this.coerce.toString(delimiter);
+  const byEach = this.coerce.toBoolean(split_by_each);
+
+  if (delim === '') {
+    return [str];
+  }
+
+  if (byEach) {
+    // Split by each character in the delimiter
+    const regex = new RegExp('[' + delim.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ']');
+    return str.split(regex).filter(s => s !== '');
+  }
+
+  return str.split(delim);
+}
+
+// ============================================
+// LOW PRIORITY TEXT FUNCTIONS
+// ============================================
+
+/**
+ * T: Returns the text referred to by value, or empty string if not text.
+ *
+ * @param {*} value - The value to check.
+ * @returns {string} The text if value is text, otherwise empty string.
+ */
+function T(value) {
+  if (typeof value === 'string') {
+    return value;
+  }
+  return '';
+}
+
+/**
+ * CHAR: Returns the character specified by a code number.
+ *
+ * @param {*} number - The character code (1-255).
+ * @returns {string} The character.
+ * @throws {ValueError} If the code is out of range.
+ */
+function CHAR(number) {
+  const code = this.coerce.toNumber(number);
+
+  if (code < 1 || code > 255) {
+    throw new ValueError('Code must be between 1 and 255');
+  }
+
+  return String.fromCharCode(Math.floor(code));
+}
+
+/**
+ * CODE: Returns the numeric code for the first character in a text string.
+ *
+ * @param {*} text - The text string.
+ * @returns {number} The character code.
+ * @throws {ValueError} If the text is empty.
+ */
+function CODE(text) {
+  const str = this.coerce.toString(text);
+
+  if (str.length === 0) {
+    throw new ValueError('Text cannot be empty');
+  }
+
+  return str.charCodeAt(0);
+}
+
+/**
+ * CLEAN: Removes all non-printable characters from text.
+ *
+ * @param {*} text - The text to clean.
+ * @returns {string} The cleaned text.
+ */
+function CLEAN(text) {
+  const str = this.coerce.toString(text);
+  // Remove characters with codes 0-31 (non-printable ASCII)
+  return str.replace(/[\x00-\x1F]/g, '');
+}
+
 // Export all functions as an object
 export const textFunctions = {
   LEN,
@@ -425,4 +589,15 @@ export const textFunctions = {
   REPLACE,
   TEXT,
   VALUE,
+  // Medium priority
+  REPT,
+  PROPER,
+  EXACT,
+  TEXTJOIN,
+  SPLIT,
+  // Low priority
+  T,
+  CHAR,
+  CODE,
+  CLEAN,
 };

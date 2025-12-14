@@ -153,6 +153,132 @@ function IFERROR(value, value_if_error) {
   return value;
 }
 
+// ============================================
+// MEDIUM PRIORITY LOGICAL FUNCTIONS
+// ============================================
+
+/**
+ * IFNA: Returns a specified value if a formula evaluates to #N/A error;
+ * otherwise, returns the result of the formula.
+ *
+ * @param {*} value - The value or expression to check.
+ * @param {*} value_if_na - The value to return if #N/A.
+ * @returns {*} The original value if not #N/A, otherwise value_if_na.
+ */
+function IFNA(value, value_if_na) {
+  // Check if value is a NotAvailableError instance
+  if (value instanceof NotAvailableError) {
+    return value_if_na;
+  }
+
+  // Check if value is the #N/A string
+  if (typeof value === 'string' && value.toUpperCase() === '#N/A') {
+    return value_if_na;
+  }
+
+  return value;
+}
+
+/**
+ * XOR: Returns TRUE if an odd number of arguments are TRUE.
+ *
+ * @param {...any} args - Variable number of logical expressions.
+ * @returns {boolean} TRUE if odd number of args are TRUE, FALSE otherwise.
+ */
+function XOR(...args) {
+  const values = args.flat(Infinity);
+
+  let trueCount = 0;
+  for (const value of values) {
+    if (this.coerce.toBoolean(value)) {
+      trueCount++;
+    }
+  }
+
+  return trueCount % 2 === 1;
+}
+
+/**
+ * SWITCH: Evaluates an expression against a list of values and returns
+ * the result corresponding to the first matching value.
+ *
+ * @param {*} expression - The value to match.
+ * @param {...any} args - Pairs of (value, result), optionally followed by a default.
+ * @returns {*} The result for the matching value.
+ * @throws {NotAvailableError} If no match found and no default provided.
+ */
+function SWITCH(expression, ...args) {
+  if (args.length === 0) {
+    throw new ValueError('SWITCH requires at least one value-result pair');
+  }
+
+  // Check if we have a default value (odd number of remaining args)
+  const hasDefault = args.length % 2 === 1;
+  const pairs = hasDefault ? args.slice(0, -1) : args;
+  const defaultValue = hasDefault ? args[args.length - 1] : undefined;
+
+  // Check each value-result pair
+  for (let i = 0; i < pairs.length; i += 2) {
+    const matchValue = pairs[i];
+    const result = pairs[i + 1];
+
+    // Compare values (case-insensitive for strings)
+    if (typeof expression === 'string' && typeof matchValue === 'string') {
+      if (expression.toLowerCase() === matchValue.toLowerCase()) {
+        return result;
+      }
+    } else if (expression === matchValue) {
+      return result;
+    }
+  }
+
+  if (hasDefault) {
+    return defaultValue;
+  }
+
+  throw new NotAvailableError('No match found in SWITCH');
+}
+
+/**
+ * CHOOSE: Returns a value from a list based on an index number.
+ *
+ * @param {*} index_num - The index (1-based) of the value to return.
+ * @param {...any} values - The list of values to choose from.
+ * @returns {*} The selected value.
+ * @throws {ValueError} If index is out of range.
+ */
+function CHOOSE(index_num, ...values) {
+  const index = this.coerce.toNumber(index_num);
+
+  if (index < 1 || index > values.length) {
+    throw new ValueError('CHOOSE index out of range');
+  }
+
+  return values[Math.floor(index) - 1];
+}
+
+// ============================================
+// LOW PRIORITY LOGICAL FUNCTIONS
+// ============================================
+
+/**
+ * TRUE: Returns the logical value TRUE.
+ *
+ * @returns {boolean} TRUE.
+ */
+function TRUE() {
+  return true;
+}
+
+/**
+ * FALSE: Returns the logical value FALSE.
+ *
+ * @returns {boolean} FALSE.
+ */
+function FALSE() {
+  return false;
+}
+
 // Export all functions as an object
 export const logicalFunctions = {
   IF,
@@ -161,4 +287,12 @@ export const logicalFunctions = {
   NOT,
   IFS,
   IFERROR,
+  // Medium priority
+  IFNA,
+  XOR,
+  SWITCH,
+  CHOOSE,
+  // Low priority
+  TRUE,
+  FALSE,
 };

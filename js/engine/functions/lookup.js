@@ -300,11 +300,116 @@ function MATCH(lookup_value, lookup_array, match_type = 1) {
   throw new ValueError('match_type must be -1, 0, or 1');
 }
 
+// ============================================
+// MEDIUM PRIORITY LOOKUP FUNCTIONS
+// ============================================
+
+/**
+ * ROW: Returns the row number of a reference.
+ * Note: In a full implementation, this would work with cell references.
+ * Here we accept an array and return row numbers, or just the row number if given one.
+ *
+ * @param {*} [reference] - A cell reference or array. If omitted, returns 1.
+ * @returns {number|Array} The row number(s).
+ */
+function ROW(reference) {
+  // If no reference, return 1 (would return current row in a full implementation)
+  if (reference === undefined) {
+    return 1;
+  }
+
+  // If reference is a 2D array, return array of row numbers
+  if (Array.isArray(reference)) {
+    if (Array.isArray(reference[0])) {
+      // 2D array - return column of row numbers
+      return reference.map((_, i) => i + 1);
+    }
+    // 1D array - return row numbers for each element
+    return reference.map((_, i) => i + 1);
+  }
+
+  // Single value - return 1
+  return 1;
+}
+
+/**
+ * COLUMN: Returns the column number of a reference.
+ * Note: In a full implementation, this would work with cell references.
+ * Here we accept an array and return column numbers, or just the column number if given one.
+ *
+ * @param {*} [reference] - A cell reference or array. If omitted, returns 1.
+ * @returns {number|Array} The column number(s).
+ */
+function COLUMN(reference) {
+  // If no reference, return 1 (would return current column in a full implementation)
+  if (reference === undefined) {
+    return 1;
+  }
+
+  // If reference is a 2D array, return row of column numbers
+  if (Array.isArray(reference)) {
+    if (Array.isArray(reference[0])) {
+      // 2D array - return row of column numbers (based on first row width)
+      return reference[0].map((_, i) => i + 1);
+    }
+    // 1D array treated as single row - return column numbers
+    return reference.map((_, i) => i + 1);
+  }
+
+  // Single value - return 1
+  return 1;
+}
+
+/**
+ * ROWS: Returns the number of rows in a reference or array.
+ *
+ * @param {*} array - A reference or array.
+ * @returns {number} The number of rows.
+ */
+function ROWS(array) {
+  if (!Array.isArray(array)) {
+    return 1;
+  }
+
+  // If it's a 2D array, return the number of rows
+  if (Array.isArray(array[0])) {
+    return array.length;
+  }
+
+  // If it's a 1D array treated as a column, return its length
+  return array.length;
+}
+
+/**
+ * COLUMNS: Returns the number of columns in a reference or array.
+ *
+ * @param {*} array - A reference or array.
+ * @returns {number} The number of columns.
+ */
+function COLUMNS(array) {
+  if (!Array.isArray(array)) {
+    return 1;
+  }
+
+  // If it's a 2D array, return the number of columns in the first row
+  if (Array.isArray(array[0])) {
+    return array[0].length;
+  }
+
+  // If it's a 1D array treated as a row, return its length
+  return array.length;
+}
+
 // Export all functions as an object
 export const lookupFunctions = {
   VLOOKUP,
   HLOOKUP,
   INDEX,
   MATCH,
+  // Medium priority
+  ROW,
+  COLUMN,
+  ROWS,
+  COLUMNS,
   _areValuesEqual, // Export for testing
 };

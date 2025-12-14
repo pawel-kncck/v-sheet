@@ -43,6 +43,29 @@ describe('Math Functions', () => {
       PRODUCT: registry.get('PRODUCT').bind(mockEvaluator),
       COUNTIF: registry.get('COUNTIF').bind(mockEvaluator),
       MEDIAN: registry.get('MEDIAN').bind(mockEvaluator),
+      // Medium priority
+      ROUNDUP: registry.get('ROUNDUP').bind(mockEvaluator),
+      ROUNDDOWN: registry.get('ROUNDDOWN').bind(mockEvaluator),
+      TRUNC: registry.get('TRUNC').bind(mockEvaluator),
+      SIGN: registry.get('SIGN').bind(mockEvaluator),
+      RAND: registry.get('RAND').bind(mockEvaluator),
+      RANDBETWEEN: registry.get('RANDBETWEEN').bind(mockEvaluator),
+      COUNTBLANK: registry.get('COUNTBLANK').bind(mockEvaluator),
+      AVERAGEIF: registry.get('AVERAGEIF').bind(mockEvaluator),
+      MODE: registry.get('MODE').bind(mockEvaluator),
+      STDEV: registry.get('STDEV').bind(mockEvaluator),
+      VAR: registry.get('VAR').bind(mockEvaluator),
+      // Low priority
+      PI: registry.get('PI').bind(mockEvaluator),
+      EXP: registry.get('EXP').bind(mockEvaluator),
+      LN: registry.get('LN').bind(mockEvaluator),
+      LOG: registry.get('LOG').bind(mockEvaluator),
+      LOG10: registry.get('LOG10').bind(mockEvaluator),
+      SIN: registry.get('SIN').bind(mockEvaluator),
+      COS: registry.get('COS').bind(mockEvaluator),
+      TAN: registry.get('TAN').bind(mockEvaluator),
+      DEGREES: registry.get('DEGREES').bind(mockEvaluator),
+      RADIANS: registry.get('RADIANS').bind(mockEvaluator),
     };
   });
 
@@ -465,6 +488,241 @@ describe('Math Functions', () => {
 
     it('should throw error for no valid numbers', () => {
       expect(() => funcs.MEDIAN('text')).toThrow(NumError);
+    });
+  });
+
+  // ============================================
+  // MEDIUM PRIORITY MATH FUNCTION TESTS
+  // ============================================
+
+  describe('ROUNDUP', () => {
+    it('should round up positive numbers', () => {
+      expect(funcs.ROUNDUP(3.2, 0)).toBe(4);
+      expect(funcs.ROUNDUP(3.14159, 2)).toBe(3.15);
+    });
+
+    it('should round up negative numbers (away from zero)', () => {
+      expect(funcs.ROUNDUP(-3.2, 0)).toBe(-4);
+    });
+
+    it('should handle negative num_digits', () => {
+      expect(funcs.ROUNDUP(123, -1)).toBe(130);
+      expect(funcs.ROUNDUP(123, -2)).toBe(200);
+    });
+  });
+
+  describe('ROUNDDOWN', () => {
+    it('should round down positive numbers', () => {
+      expect(funcs.ROUNDDOWN(3.9, 0)).toBe(3);
+      expect(funcs.ROUNDDOWN(3.14159, 2)).toBe(3.14);
+    });
+
+    it('should round down negative numbers (toward zero)', () => {
+      expect(funcs.ROUNDDOWN(-3.9, 0)).toBe(-3);
+    });
+
+    it('should handle negative num_digits', () => {
+      expect(funcs.ROUNDDOWN(129, -1)).toBe(120);
+    });
+  });
+
+  describe('TRUNC', () => {
+    it('should truncate to integer by default', () => {
+      expect(funcs.TRUNC(3.9)).toBe(3);
+      expect(funcs.TRUNC(-3.9)).toBe(-3);
+    });
+
+    it('should truncate to specified decimal places', () => {
+      expect(funcs.TRUNC(3.14159, 2)).toBe(3.14);
+    });
+  });
+
+  describe('SIGN', () => {
+    it('should return 1 for positive numbers', () => {
+      expect(funcs.SIGN(5)).toBe(1);
+      expect(funcs.SIGN(0.1)).toBe(1);
+    });
+
+    it('should return -1 for negative numbers', () => {
+      expect(funcs.SIGN(-5)).toBe(-1);
+      expect(funcs.SIGN(-0.1)).toBe(-1);
+    });
+
+    it('should return 0 for zero', () => {
+      expect(funcs.SIGN(0)).toBe(0);
+    });
+  });
+
+  describe('RAND', () => {
+    it('should return a number between 0 and 1', () => {
+      const result = funcs.RAND();
+      expect(result).toBeGreaterThanOrEqual(0);
+      expect(result).toBeLessThan(1);
+    });
+  });
+
+  describe('RANDBETWEEN', () => {
+    it('should return an integer within the range', () => {
+      const result = funcs.RANDBETWEEN(1, 10);
+      expect(result).toBeGreaterThanOrEqual(1);
+      expect(result).toBeLessThanOrEqual(10);
+      expect(Number.isInteger(result)).toBe(true);
+    });
+
+    it('should handle equal bottom and top', () => {
+      expect(funcs.RANDBETWEEN(5, 5)).toBe(5);
+    });
+
+    it('should throw error if bottom > top', () => {
+      expect(() => funcs.RANDBETWEEN(10, 1)).toThrow(NumError);
+    });
+  });
+
+  describe('COUNTBLANK', () => {
+    it('should count empty cells', () => {
+      expect(funcs.COUNTBLANK(['', null, undefined, 'text', 0])).toBe(3);
+    });
+
+    it('should not count zero as blank', () => {
+      expect(funcs.COUNTBLANK([0, '', 1])).toBe(1);
+    });
+
+    it('should handle nested arrays', () => {
+      expect(funcs.COUNTBLANK([['', 1], [null, 2]])).toBe(2);
+    });
+  });
+
+  describe('AVERAGEIF', () => {
+    it('should average values meeting criteria', () => {
+      expect(funcs.AVERAGEIF([10, 20, 30, 40], '>20')).toBe(35);
+    });
+
+    it('should use separate sum range', () => {
+      expect(funcs.AVERAGEIF(['A', 'B', 'A', 'B'], 'A', [10, 20, 30, 40])).toBe(20);
+    });
+
+    it('should throw error when no values match', () => {
+      expect(() => funcs.AVERAGEIF([10, 20], '>100')).toThrow(DivZeroError);
+    });
+  });
+
+  describe('MODE', () => {
+    it('should return most frequent value', () => {
+      expect(funcs.MODE(1, 2, 2, 3, 3, 3)).toBe(3);
+    });
+
+    it('should return first mode when multiple exist', () => {
+      expect(funcs.MODE(1, 1, 2, 2)).toBe(1);
+    });
+
+    it('should handle arrays', () => {
+      expect(funcs.MODE([1, 2, 2, 3])).toBe(2);
+    });
+  });
+
+  describe('STDEV', () => {
+    it('should calculate sample standard deviation', () => {
+      expect(funcs.STDEV(2, 4, 4, 4, 5, 5, 7, 9)).toBeCloseTo(2.138, 3);
+    });
+
+    it('should handle arrays', () => {
+      expect(funcs.STDEV([1, 2, 3, 4, 5])).toBeCloseTo(1.5811, 3);
+    });
+  });
+
+  describe('VAR', () => {
+    it('should calculate sample variance', () => {
+      expect(funcs.VAR(2, 4, 4, 4, 5, 5, 7, 9)).toBeCloseTo(4.571, 3);
+    });
+
+    it('should handle arrays', () => {
+      expect(funcs.VAR([1, 2, 3, 4, 5])).toBeCloseTo(2.5, 3);
+    });
+  });
+
+  // ============================================
+  // LOW PRIORITY MATH FUNCTION TESTS
+  // ============================================
+
+  describe('PI', () => {
+    it('should return PI', () => {
+      expect(funcs.PI()).toBeCloseTo(3.14159265, 8);
+    });
+  });
+
+  describe('EXP', () => {
+    it('should return e raised to a power', () => {
+      expect(funcs.EXP(0)).toBe(1);
+      expect(funcs.EXP(1)).toBeCloseTo(2.71828, 4);
+      expect(funcs.EXP(2)).toBeCloseTo(7.389, 3);
+    });
+  });
+
+  describe('LN', () => {
+    it('should return natural logarithm', () => {
+      expect(funcs.LN(1)).toBe(0);
+      expect(funcs.LN(Math.E)).toBeCloseTo(1, 10);
+    });
+
+    it('should throw error for non-positive numbers', () => {
+      expect(() => funcs.LN(0)).toThrow(NumError);
+      expect(() => funcs.LN(-1)).toThrow(NumError);
+    });
+  });
+
+  describe('LOG', () => {
+    it('should return logarithm with base 10 by default', () => {
+      expect(funcs.LOG(100)).toBeCloseTo(2, 10);
+      expect(funcs.LOG(1000)).toBeCloseTo(3, 10);
+    });
+
+    it('should support custom base', () => {
+      expect(funcs.LOG(8, 2)).toBeCloseTo(3, 10);
+      expect(funcs.LOG(27, 3)).toBeCloseTo(3, 10);
+    });
+  });
+
+  describe('LOG10', () => {
+    it('should return base 10 logarithm', () => {
+      expect(funcs.LOG10(100)).toBeCloseTo(2, 10);
+      expect(funcs.LOG10(1)).toBe(0);
+    });
+  });
+
+  describe('SIN', () => {
+    it('should return sine of angle in radians', () => {
+      expect(funcs.SIN(0)).toBe(0);
+      expect(funcs.SIN(Math.PI / 2)).toBeCloseTo(1, 10);
+      expect(funcs.SIN(Math.PI)).toBeCloseTo(0, 10);
+    });
+  });
+
+  describe('COS', () => {
+    it('should return cosine of angle in radians', () => {
+      expect(funcs.COS(0)).toBe(1);
+      expect(funcs.COS(Math.PI / 2)).toBeCloseTo(0, 10);
+      expect(funcs.COS(Math.PI)).toBeCloseTo(-1, 10);
+    });
+  });
+
+  describe('TAN', () => {
+    it('should return tangent of angle in radians', () => {
+      expect(funcs.TAN(0)).toBe(0);
+      expect(funcs.TAN(Math.PI / 4)).toBeCloseTo(1, 10);
+    });
+  });
+
+  describe('DEGREES', () => {
+    it('should convert radians to degrees', () => {
+      expect(funcs.DEGREES(Math.PI)).toBeCloseTo(180, 10);
+      expect(funcs.DEGREES(Math.PI / 2)).toBeCloseTo(90, 10);
+    });
+  });
+
+  describe('RADIANS', () => {
+    it('should convert degrees to radians', () => {
+      expect(funcs.RADIANS(180)).toBeCloseTo(Math.PI, 10);
+      expect(funcs.RADIANS(90)).toBeCloseTo(Math.PI / 2, 10);
     });
   });
 });

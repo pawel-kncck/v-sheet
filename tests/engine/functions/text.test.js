@@ -33,6 +33,17 @@ describe('Text Functions', () => {
       REPLACE: registry.get('REPLACE').bind(mockEvaluator),
       TEXT: registry.get('TEXT').bind(mockEvaluator),
       VALUE: registry.get('VALUE').bind(mockEvaluator),
+      // Medium priority
+      REPT: registry.get('REPT').bind(mockEvaluator),
+      PROPER: registry.get('PROPER').bind(mockEvaluator),
+      EXACT: registry.get('EXACT').bind(mockEvaluator),
+      TEXTJOIN: registry.get('TEXTJOIN').bind(mockEvaluator),
+      SPLIT: registry.get('SPLIT').bind(mockEvaluator),
+      // Low priority
+      T: registry.get('T').bind(mockEvaluator),
+      CHAR: registry.get('CHAR').bind(mockEvaluator),
+      CODE: registry.get('CODE').bind(mockEvaluator),
+      CLEAN: registry.get('CLEAN').bind(mockEvaluator),
     };
   });
 
@@ -430,6 +441,138 @@ describe('Text Functions', () => {
     it('should throw error for non-numeric strings', () => {
       expect(() => funcs.VALUE('hello')).toThrow(ValueError);
       expect(() => funcs.VALUE('abc123')).toThrow(ValueError);
+    });
+  });
+
+  // ============================================
+  // MEDIUM PRIORITY TEXT FUNCTION TESTS
+  // ============================================
+
+  describe('REPT', () => {
+    it('should repeat text specified times', () => {
+      expect(funcs.REPT('ab', 3)).toBe('ababab');
+      expect(funcs.REPT('*', 5)).toBe('*****');
+    });
+
+    it('should return empty string for 0 times', () => {
+      expect(funcs.REPT('hello', 0)).toBe('');
+    });
+
+    it('should throw error for negative times', () => {
+      expect(() => funcs.REPT('hello', -1)).toThrow(ValueError);
+    });
+  });
+
+  describe('PROPER', () => {
+    it('should capitalize first letter of each word', () => {
+      expect(funcs.PROPER('hello world')).toBe('Hello World');
+      expect(funcs.PROPER('JOHN DOE')).toBe('John Doe');
+    });
+
+    it('should handle single word', () => {
+      expect(funcs.PROPER('javascript')).toBe('Javascript');
+    });
+
+    it('should handle mixed case', () => {
+      expect(funcs.PROPER('hELLO wORLD')).toBe('Hello World');
+    });
+  });
+
+  describe('EXACT', () => {
+    it('should return TRUE for identical strings', () => {
+      expect(funcs.EXACT('hello', 'hello')).toBe(true);
+    });
+
+    it('should return FALSE for different strings', () => {
+      expect(funcs.EXACT('hello', 'world')).toBe(false);
+    });
+
+    it('should be case-sensitive', () => {
+      expect(funcs.EXACT('Hello', 'hello')).toBe(false);
+    });
+  });
+
+  describe('TEXTJOIN', () => {
+    it('should join strings with delimiter', () => {
+      expect(funcs.TEXTJOIN(', ', false, 'a', 'b', 'c')).toBe('a, b, c');
+    });
+
+    it('should ignore empty when set to true', () => {
+      expect(funcs.TEXTJOIN(', ', true, 'a', '', 'c')).toBe('a, c');
+    });
+
+    it('should include empty when set to false', () => {
+      expect(funcs.TEXTJOIN(', ', false, 'a', '', 'c')).toBe('a, , c');
+    });
+
+    it('should handle arrays', () => {
+      expect(funcs.TEXTJOIN('-', false, ['a', 'b'], 'c')).toBe('a-b-c');
+    });
+  });
+
+  describe('SPLIT', () => {
+    it('should split text by delimiter', () => {
+      expect(funcs.SPLIT('a,b,c', ',')).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should split by each character when split_by_each is true', () => {
+      expect(funcs.SPLIT('a,b;c', ',;', true)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('should return original string when delimiter is empty', () => {
+      expect(funcs.SPLIT('hello', '')).toEqual(['hello']);
+    });
+  });
+
+  // ============================================
+  // LOW PRIORITY TEXT FUNCTION TESTS
+  // ============================================
+
+  describe('T', () => {
+    it('should return text if value is text', () => {
+      expect(funcs.T('hello')).toBe('hello');
+    });
+
+    it('should return empty string for non-text', () => {
+      expect(funcs.T(123)).toBe('');
+      expect(funcs.T(true)).toBe('');
+      expect(funcs.T(null)).toBe('');
+    });
+  });
+
+  describe('CHAR', () => {
+    it('should return character for code', () => {
+      expect(funcs.CHAR(65)).toBe('A');
+      expect(funcs.CHAR(97)).toBe('a');
+      expect(funcs.CHAR(32)).toBe(' ');
+    });
+
+    it('should throw error for invalid code', () => {
+      expect(() => funcs.CHAR(0)).toThrow(ValueError);
+      expect(() => funcs.CHAR(256)).toThrow(ValueError);
+    });
+  });
+
+  describe('CODE', () => {
+    it('should return code for first character', () => {
+      expect(funcs.CODE('A')).toBe(65);
+      expect(funcs.CODE('ABC')).toBe(65);
+      expect(funcs.CODE('a')).toBe(97);
+    });
+
+    it('should throw error for empty string', () => {
+      expect(() => funcs.CODE('')).toThrow(ValueError);
+    });
+  });
+
+  describe('CLEAN', () => {
+    it('should remove non-printable characters', () => {
+      expect(funcs.CLEAN('hello\x00world')).toBe('helloworld');
+      expect(funcs.CLEAN('test\x1F')).toBe('test');
+    });
+
+    it('should preserve printable characters', () => {
+      expect(funcs.CLEAN('hello world')).toBe('hello world');
     });
   });
 });
