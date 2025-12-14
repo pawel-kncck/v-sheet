@@ -5,8 +5,9 @@
  *
  * In this mode:
  * - Arrow keys navigate the grid
- * - Typing a character starts input (EnterMode or PointMode)
- * - F2 or double-click starts editing (EditMode)
+ * - Typing a formula trigger starts FormulaMode
+ * - Typing other characters starts EnterMode
+ * - F2 or double-click starts editing (EditMode for non-formulas, FormulaMode for formulas)
  * - All clipboard and history operations work
  * - Cell selection works normally
  *
@@ -104,7 +105,7 @@ export class ReadyMode extends NavigationMode {
   /**
    * Handles INPUT intent (character typed).
    *
-   * Transitions to EnterMode or PointMode depending on the character.
+   * Transitions to FormulaMode or EnterMode depending on the character.
    *
    * @private
    * @param {{ char: string, isFormulaTrigger: boolean }} context
@@ -120,9 +121,9 @@ export class ReadyMode extends NavigationMode {
     }
 
     if (isFormulaTrigger) {
-      // Start formula mode (PointMode)
-      Logger.log(this.getName(), `Formula trigger "${char}" → PointMode`);
-      this._requestModeSwitch('point', {
+      // Start formula mode
+      Logger.log(this.getName(), `Formula trigger "${char}" → FormulaMode`);
+      this._requestModeSwitch('formula', {
         cellId: activeCellId,
         triggerKey: char
       });
@@ -141,7 +142,7 @@ export class ReadyMode extends NavigationMode {
   /**
    * Handles EDIT_START intent (F2 or double-click).
    *
-   * Transitions to EditMode.
+   * Transitions to FormulaMode for formulas, EditMode for non-formulas.
    *
    * @private
    * @param {{ source: string }} context
@@ -155,17 +156,25 @@ export class ReadyMode extends NavigationMode {
       return false;
     }
 
-    const currentValue = this._getCellValue(activeCellId);
-    const isFormula = currentValue && currentValue.startsWith('=');
+    const currentValue = this._getCellValue(activeCellId) || '';
+    const isFormula = currentValue.startsWith('=');
 
-    Logger.log(this.getName(), `Edit start (${context.source}) → EditMode`);
-
-    // Transition to EditMode
-    this._requestModeSwitch('edit', {
-      cellId: activeCellId,
-      initialValue: currentValue,
-      isFormula: isFormula
-    });
+    if (isFormula) {
+      // Formula cell - use FormulaMode in editing state
+      Logger.log(this.getName(), `Edit start (${context.source}) → FormulaMode (editing)`);
+      this._requestModeSwitch('formula', {
+        cellId: activeCellId,
+        triggerKey: currentValue,
+        startInEditingState: true
+      });
+    } else {
+      // Non-formula cell - use EditMode
+      Logger.log(this.getName(), `Edit start (${context.source}) → EditMode`);
+      this._requestModeSwitch('edit', {
+        cellId: activeCellId,
+        initialValue: currentValue
+      });
+    }
 
     return true;
   }
