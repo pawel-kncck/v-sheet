@@ -51,7 +51,7 @@ export class ClipboardManager {
       for (let c = minCol; c <= maxCol; c++) {
         const cellId = this._coordsToCellId(r, c);
 
-        // UPDATED: Get both Value and resolved Style Object
+        // UPDATED: Get Value, resolved Style Object, and RichText
         const cellData = this.dataGetter(cellId);
 
         console.log('[ClipboardManager] Getting data for', cellId, ':', cellData.value);
@@ -60,6 +60,7 @@ export class ClipboardManager {
           originalCellId: cellId,
           value: cellData.value,
           style: cellData.style, // <--- Store full style object
+          richText: cellData.richText, // <--- Store rich text runs
           relativePos: { row: r - minRow, col: c - minCol }
         });
 
@@ -154,7 +155,8 @@ export class ClipboardManager {
         updates.push({
           cellId: destCellId,
           value: value,
-          style: sourceItem.style
+          style: sourceItem.style,
+          richText: sourceItem.richText // Include rich text runs
         });
       });
     } else {
@@ -178,7 +180,8 @@ export class ClipboardManager {
         updates.push({
           cellId: destCellId,
           value: value,
-          style: item.style // <--- Pass style along
+          style: item.style, // <--- Pass style along
+          richText: item.richText // <--- Pass rich text runs
         });
       });
     }

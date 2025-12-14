@@ -5,6 +5,9 @@ export class Toolbar {
     this.container = container;
     this.spreadsheet = spreadsheet;
 
+    // Track button elements for state updates
+    this._buttons = {};
+
     this.items = [
       // ... Undo/Redo buttons ...
       {
@@ -231,7 +234,52 @@ export class Toolbar {
         this.spreadsheet.renderer.cellGridContainer.focus();
       });
 
+      // Track buttons for state updates
+      this._buttons[item.id] = btn;
+
       this.container.appendChild(btn);
     });
+  }
+
+  /**
+   * Updates toolbar button states based on current style.
+   * Called when selection changes or when editor style changes.
+   *
+   * @param {Object} style - Current effective style with font properties
+   * @param {boolean} disabled - Whether formatting should be disabled (e.g., in Point mode)
+   */
+  updateState(style, disabled = false) {
+    const boldBtn = this._buttons['bold'];
+    const italicBtn = this._buttons['italic'];
+
+    if (boldBtn) {
+      if (disabled) {
+        boldBtn.classList.add('disabled');
+        boldBtn.classList.remove('active');
+      } else {
+        boldBtn.classList.remove('disabled');
+        if (style?.font?.bold) {
+          boldBtn.classList.add('active');
+        } else {
+          boldBtn.classList.remove('active');
+        }
+      }
+    }
+
+    if (italicBtn) {
+      if (disabled) {
+        italicBtn.classList.add('disabled');
+        italicBtn.classList.remove('active');
+      } else {
+        italicBtn.classList.remove('disabled');
+        if (style?.font?.italic) {
+          italicBtn.classList.add('active');
+        } else {
+          italicBtn.classList.remove('active');
+        }
+      }
+    }
+
+    Logger.log('Toolbar', 'State updated', { bold: style?.font?.bold, italic: style?.font?.italic, disabled });
   }
 }

@@ -61,26 +61,97 @@ export class GridRenderer {
     Logger.log('GridRenderer', 'Grid created successfully');
   }
 
-  updateCellContent(cellId, value) {
+  /**
+   * Updates cell content - supports both plain text and rich text.
+   * @param {string} cellId - Cell ID (e.g., "A1")
+   * @param {string} value - Display value
+   * @param {Array|null} richText - Optional rich text runs array
+   * @param {Object|null} cellStyle - Cell-level style for inheritance
+   * @param {Object|null} styleManager - StyleManager for resolving styles
+   */
+  updateCellContent(cellId, value, richText = null, cellStyle = null, styleManager = null) {
     const cell = this.getCellElement(cellId);
-    if (cell) {
-      const displayValue = value === undefined || value === null ? '' : value;
-      cell.textContent = displayValue;
+    if (!cell) return;
 
-      // Apply automatic alignment based on content type
-      // Numbers align right, text aligns left
-      // This will be overridden if updateCellStyle is called with explicit alignment
-      if (displayValue && String(displayValue).trim() !== '') {
-        const strValue = String(displayValue).trim();
-        // A value is a number if it can be parsed as a number AND
-        // the parsed number converts back to the same string (to avoid "123abc" -> 123)
-        const numValue = Number(strValue);
-        const isNumber = !isNaN(numValue) && isFinite(numValue) && strValue === String(numValue);
-        cell.style.textAlign = isNumber ? 'right' : 'left';
-      } else {
-        cell.style.textAlign = 'left';
-      }
+    const displayValue = value === undefined || value === null ? '' : value;
+
+    // Check if we have rich text runs to render
+    if (richText && richText.length > 0 && styleManager && displayValue) {
+      this._renderRichTextContent(cell, displayValue, richText, cellStyle, styleManager);
+    } else {
+      // Plain text rendering (existing behavior)
+      cell.textContent = displayValue;
     }
+
+    // Apply automatic alignment based on content type
+    // Numbers align right, text aligns left
+    // This will be overridden if updateCellStyle is called with explicit alignment
+    if (displayValue && String(displayValue).trim() !== '') {
+      const strValue = String(displayValue).trim();
+      // A value is a number if it can be parsed as a number AND
+      // the parsed number converts back to the same string (to avoid "123abc" -> 123)
+      const numValue = Number(strValue);
+      const isNumber = !isNaN(numValue) && isFinite(numValue) && strValue === String(numValue);
+      cell.style.textAlign = isNumber ? 'right' : 'left';
+    } else {
+      cell.style.textAlign = 'left';
+    }
+  }
+
+  /**
+   * Renders rich text content with spans for each formatted run.
+   * @private
+   * @param {HTMLElement} cell - The cell element
+   * @param {string} value - The plain text value
+   * @param {Array} richText - Array of rich text runs { start, end, styleId }
+   * @param {Object|null} cellStyle - Cell-level style for inheritance
+   * @param {Object} styleManager - StyleManager for resolving styles
+   */
+  _renderRichTextContent(cell, value, richText, cellStyle, styleManager) {
+    // Clear existing content
+    cell.innerHTML = '';
+
+    for (const run of richText) {
+      const span = document.createElement('span');
+      const text = value.substring(run.start, run.end);
+      span.textContent = text;
+
+      // Get the run's style and resolve with cell style
+      const runStyle = run.styleId ? styleManager.getStyle(run.styleId) : null;
+      const effectiveStyle = styleManager.resolveStyle(cellStyle, runStyle);
+
+      // Apply inline styles to span
+      this._applyInlineStyle(span, effectiveStyle);
+
+      cell.appendChild(span);
+    }
+  }
+
+  /**
+   * Applies font styling to an inline span element.
+   * @private
+   * @param {HTMLElement} span - The span element
+   * @param {Object} style - Resolved style with font properties
+   */
+  _applyInlineStyle(span, style) {
+    if (!style || !style.font) return;
+
+    const font = style.font;
+
+    if (font.bold) span.style.fontWeight = 'bold';
+    if (font.italic) span.style.fontStyle = 'italic';
+
+    // Handle text decoration (underline + strikethrough combo)
+    const decorations = [];
+    if (font.underline) decorations.push('underline');
+    if (font.strikethrough) decorations.push('line-through');
+    if (decorations.length > 0) {
+      span.style.textDecoration = decorations.join(' ');
+    }
+
+    if (font.color) span.style.color = font.color;
+    if (font.size) span.style.fontSize = `${font.size}px`;
+    if (font.family) span.style.fontFamily = font.family;
   }
 
   getCellElement(cellId) {

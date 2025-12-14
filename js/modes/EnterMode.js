@@ -81,6 +81,9 @@ export class EnterMode extends NavigationMode {
       this._context.updateModeDisplay('Enter');
     }
 
+    // Update toolbar to show cell style (initially)
+    this._updateToolbarState();
+
     Logger.log(this.getName(), `Enter mode for cell ${cellId} with "${triggerKey}"`);
   }
 
@@ -134,33 +137,16 @@ export class EnterMode extends NavigationMode {
         // Return false to allow browser to handle character input
         return false;
 
-// NEW: Handle DELETE (Backspace/Delete) explicitly
+      // Text-level formatting support - toggle active style (no text selection in Enter mode)
+      case INTENTS.FORMAT_BOLD:
+        return this._handleTextFormat('bold');
+
+      case INTENTS.FORMAT_ITALIC:
+        return this._handleTextFormat('italic');
+
+      // Handle DELETE (Backspace/Delete) explicitly
       case INTENTS.DELETE:
-        // In EnterMode, make Delete behave like Backspace for better UX
-        // This allows users to remove the last character with either key
-        if (context?.key === 'delete') {
-          // Trigger backspace behavior
-          if (this._editorManager) {
-            const editor = document.getElementById('cell-editor');
-            if (editor) {
-              const value = editor.value;
-              const cursorPos = editor.selectionStart;
-
-              // If cursor is at the end, remove last character (like Backspace)
-              if (cursorPos === value.length) {
-                editor.value = value.slice(0, -1);
-                editor.setSelectionRange(value.length - 1, value.length - 1);
-
-                // Trigger value change event for formula bar sync
-                if (this._editorManager.onValueChange) {
-                  this._editorManager.onValueChange(editor.value);
-                }
-                return true;
-              }
-            }
-          }
-        }
-        // Return false to let the browser handle backspace in the input
+        // In EnterMode, let contenteditable handle deletion
         return false;
 
       default:
@@ -168,6 +154,51 @@ export class EnterMode extends NavigationMode {
         // (Copy, Paste, Undo, etc.)
         return super.handleIntent(intent, context);
     }
+  }
+
+  /**
+   * Updates toolbar state based on current editor style.
+   *
+   * @private
+   */
+  _updateToolbarState() {
+    if (!this._context.updateToolbarState) {
+      return;
+    }
+
+    // Get current style from editor (active style)
+    const activeStyle = this._editorManager?.getActiveStyle();
+    if (activeStyle) {
+      this._context.updateToolbarState({ font: activeStyle }, false);
+    } else {
+      // Fall back to cell style
+      const cellStyle = this._context.fileManager?.getCellStyle(this._enteringCellId);
+      this._context.updateToolbarState(cellStyle || {}, false);
+    }
+  }
+
+  /**
+   * Handles text-level formatting in enter mode.
+   * Since text selection is not available in Enter mode,
+   * formatting always toggles the active style for new text.
+   *
+   * @private
+   * @param {string} property - Style property to toggle (e.g., 'bold')
+   * @returns {boolean}
+   */
+  _handleTextFormat(property) {
+    if (!this._editorManager) {
+      return false;
+    }
+
+    // Toggle active style for new text
+    this._editorManager.toggleActiveStyleProperty(property);
+    Logger.log(this.getName(), `Toggled active style: ${property}`);
+
+    // Update toolbar to reflect new state
+    this._updateToolbarState();
+
+    return true;
   }
 
   /**
@@ -311,13 +342,16 @@ export class EnterMode extends NavigationMode {
       return;
     }
 
-    // Get the entered value
+    // Get the entered value and rich text runs
     const newValue = this._editorManager.getValue();
+    const richTextRuns = this._editorManager.hasRichTextFormatting()
+      ? this._editorManager.getRichTextRuns()
+      : null;
 
     // Only commit if value changed
     if (newValue !== '') {
       if (this._context.executeCellUpdate) {
-        this._context.executeCellUpdate(this._enteringCellId, newValue);
+        this._context.executeCellUpdate(this._enteringCellId, newValue, richTextRuns);
       }
 
       Logger.log(this.getName(), `Committed entry for ${this._enteringCellId}:`, newValue);

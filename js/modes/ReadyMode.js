@@ -60,6 +60,55 @@ export class ReadyMode extends NavigationMode {
     if (this._context.updateModeDisplay) {
       this._context.updateModeDisplay('Ready');
     }
+
+    // Update toolbar to show active cell's style
+    this._updateToolbarState();
+  }
+
+  /**
+   * Updates toolbar state based on active cell's style.
+   *
+   * @private
+   */
+  _updateToolbarState() {
+    if (!this._context.updateToolbarState || !this._context.fileManager) {
+      return;
+    }
+
+    const activeCellId = this._getActiveCellId();
+    if (!activeCellId) {
+      this._context.updateToolbarState({}, false);
+      return;
+    }
+
+    const style = this._context.fileManager.getCellStyle(activeCellId);
+    this._context.updateToolbarState(style, false);
+  }
+
+  /**
+   * Overrides navigation to update toolbar state after movement.
+   *
+   * @protected
+   * @param {{ direction: string, shift: boolean }} context
+   * @returns {boolean}
+   */
+  _handleNavigate(context) {
+    const result = super._handleNavigate(context);
+    this._updateToolbarState();
+    return result;
+  }
+
+  /**
+   * Overrides jump to edge to update toolbar state after movement.
+   *
+   * @protected
+   * @param {{ direction: string, shift: boolean }} context
+   * @returns {boolean}
+   */
+  _handleJumpToEdge(context) {
+    const result = super._handleJumpToEdge(context);
+    this._updateToolbarState();
+    return result;
   }
 
   /**
@@ -190,6 +239,9 @@ export class ReadyMode extends NavigationMode {
     const { coords, shift, ctrl } = context;
 
     this._selectionManager.selectCell(coords, shift, ctrl);
+
+    // Update toolbar to reflect new selection's style
+    this._updateToolbarState();
 
     Logger.log(this.getName(), `Cell select at (${coords.row}, ${coords.col})`);
     return true;

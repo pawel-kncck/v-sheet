@@ -95,6 +95,9 @@ export class EditMode extends AbstractMode {
       this._context.updateModeDisplay('Edit');
     }
 
+    // Update toolbar to show cell style (initially)
+    this._updateToolbarState();
+
     Logger.log(this.getName(), `Editing cell ${cellId}`);
   }
 
@@ -111,6 +114,28 @@ export class EditMode extends AbstractMode {
     // Show fill handle again after editing
     if (this._selectionManager && this._selectionManager._fillHandle) {
       this._selectionManager._fillHandle.render();
+    }
+  }
+
+  /**
+   * Updates toolbar state based on current editor style.
+   * Shows active style or selection style.
+   *
+   * @private
+   */
+  _updateToolbarState() {
+    if (!this._context.updateToolbarState) {
+      return;
+    }
+
+    // Get current style from editor (active style or selection style)
+    const activeStyle = this._editorManager?.getActiveStyle();
+    if (activeStyle) {
+      this._context.updateToolbarState({ font: activeStyle }, false);
+    } else {
+      // Fall back to cell style
+      const cellStyle = this._context.fileManager?.getCellStyle(this._editingCellId);
+      this._context.updateToolbarState(cellStyle || {}, false);
     }
   }
 
@@ -144,9 +169,49 @@ export class EditMode extends AbstractMode {
         // Also don't handle Ctrl+Arrow in edit mode
         return false;
 
+      // Text-level formatting support
+      case INTENTS.FORMAT_BOLD:
+        return this._handleTextFormat({ bold: true });
+
+      case INTENTS.FORMAT_ITALIC:
+        return this._handleTextFormat({ italic: true });
+
       default:
         return super.handleIntent(intent, context);
     }
+  }
+
+  /**
+   * Handles text-level formatting (bold, italic, etc.) in edit mode.
+   *
+   * If text is selected: applies formatting to selection
+   * If no selection (cursor only): toggles active style for new text
+   *
+   * @private
+   * @param {Object} styleChanges - Style properties to apply
+   * @returns {boolean}
+   */
+  _handleTextFormat(styleChanges) {
+    if (!this._editorManager) {
+      return false;
+    }
+
+    // Check if there's a text selection
+    if (this._editorManager.hasSelection()) {
+      // Apply formatting to selected text
+      this._editorManager.applyFormatToSelection(styleChanges);
+      Logger.log(this.getName(), 'Applied text-level formatting to selection');
+    } else {
+      // Toggle active style for new text
+      const property = Object.keys(styleChanges)[0]; // e.g., 'bold'
+      this._editorManager.toggleActiveStyleProperty(property);
+      Logger.log(this.getName(), `Toggled active style: ${property}`);
+    }
+
+    // Update toolbar to reflect new state
+    this._updateToolbarState();
+
+    return true;
   }
 
   /**
@@ -193,12 +258,15 @@ export class EditMode extends AbstractMode {
       return false;
     }
 
-    // Get the edited value
+    // Get the edited value and rich text runs
     const newValue = this._editorManager.getValue();
+    const richTextRuns = this._editorManager.hasRichTextFormatting()
+      ? this._editorManager.getRichTextRuns()
+      : null;
 
-    // Execute cell update through context
+    // Execute cell update through context (with optional rich text)
     if (this._context.executeCellUpdate) {
-      this._context.executeCellUpdate(this._editingCellId, newValue);
+      this._context.executeCellUpdate(this._editingCellId, newValue, richTextRuns);
     }
 
     // Hide editor

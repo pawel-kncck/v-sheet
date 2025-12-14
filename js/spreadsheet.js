@@ -55,12 +55,13 @@ export class Spreadsheet {
     this.formulaHighlighter = new FormulaHighlighter(this.renderer, this.selectionManager);
     this.editor = new EditorManager(this.renderer, this.formulaHighlighter);
     
-    // Return both Value and Style for Copy operations
+    // Return Value, Style, and RichText for Copy operations
     this.clipboardManager = new ClipboardManager(this.renderer, (cellId) => {
-      if (!this.fileManager) return { value: '', style: null };
+      if (!this.fileManager) return { value: '', style: null, richText: null };
       return {
         value: this.fileManager.getRawCellValue(cellId),
-        style: this.fileManager.getCellStyle(cellId)
+        style: this.fileManager.getCellStyle(cellId),
+        richText: this.fileManager.getCellRichText(cellId)
       };
     }, this.selectionManager);
 
@@ -99,6 +100,11 @@ export class Spreadsheet {
       applyRangeFormat: this.applyRangeFormat.bind(this),
       updateModeDisplay: (modeName) => {
         this.statusBar.updateMode(modeName);
+      },
+      updateToolbarState: (style, disabled) => {
+        if (this.toolbar) {
+          this.toolbar.updateState(style, disabled);
+        }
       }
     };
 
@@ -189,6 +195,7 @@ export class Spreadsheet {
     const cells = this.renderer.cellGridContainer.querySelectorAll('.cell');
     cells.forEach(cell => {
         cell.textContent = '';
+        cell.innerHTML = ''; // Clear any rich text spans
         cell.removeAttribute('style');
     });
 
@@ -200,9 +207,26 @@ export class Spreadsheet {
     }
 
     if (fileData.cells) {
+        const styleManager = this.fileManager?.styleManager;
+
         Object.entries(fileData.cells).forEach(([cellId, cellData]) => {
             if (cellData.value !== undefined) {
-                this.renderer.updateCellContent(cellId, cellData.value);
+                // Get cell-level style for rich text inheritance
+                const cellStyle = this.fileManager?.getCellStyle(cellId);
+
+                // Check if cell has rich text formatting (and is not a formula)
+                const hasRichText = cellData.richText &&
+                                   cellData.richText.length > 0 &&
+                                   !cellData.formula;
+
+                // Pass richText, cellStyle and styleManager for rich text rendering
+                this.renderer.updateCellContent(
+                    cellId,
+                    cellData.value,
+                    hasRichText ? cellData.richText : null,
+                    cellStyle,
+                    styleManager
+                );
             }
             if (this.fileManager) {
                 const style = this.fileManager.getCellStyle(cellId);
@@ -650,15 +674,36 @@ export class Spreadsheet {
     this.historyManager.execute(command);
   }
 
-  _executeCellUpdate(cellId, newValue) {
+  /**
+   * Executes a cell update with optional rich text formatting.
+   * @param {string} cellId - The cell to update
+   * @param {string} newValue - The new plain text value
+   * @param {Array|null} newRichText - Optional rich text runs
+   */
+  _executeCellUpdate(cellId, newValue, newRichText = null) {
     const oldValue = this.fileManager.getRawCellValue(cellId);
-    if (newValue === oldValue) return;
+    const oldRichText = this.fileManager.getCellRichText(cellId);
+
+    // Check if anything changed
+    if (newValue === oldValue && !newRichText && !oldRichText) return;
+
+    const cellUpdate = {
+      cellId,
+      newValue,
+      oldValue
+    };
+
+    // Include rich text if provided
+    if (newRichText !== null || oldRichText !== null) {
+      cellUpdate.newRichText = newRichText;
+      cellUpdate.oldRichText = oldRichText;
+    }
 
     const command = new UpdateCellsCommand({
-      cellUpdates: [{ cellId, newValue, oldValue }],
+      cellUpdates: [cellUpdate],
       fileManager: this.fileManager,
       formulaWorker: this.formulaWorker,
-      renderer: this.renderer // Pass renderer
+      renderer: this.renderer
     });
 
     this.historyManager.execute(command);
@@ -677,8 +722,10 @@ export class Spreadsheet {
       cellId: update.cellId,
       newValue: update.value,
       newStyle: update.style, // Include Style
+      newRichText: update.richText, // Include RichText
       oldValue: this.fileManager.getRawCellValue(update.cellId),
-      oldStyle: this.fileManager.getCellStyle(update.cellId) // Capture Old Style for Undo
+      oldStyle: this.fileManager.getCellStyle(update.cellId), // Capture Old Style for Undo
+      oldRichText: this.fileManager.getCellRichText(update.cellId) // Capture Old RichText for Undo
     }));
 
     const command = new UpdateCellsCommand({

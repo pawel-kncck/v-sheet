@@ -117,6 +117,11 @@ export class FormulaMode extends NavigationMode {
     // Update UI to show current state
     this._updateModeDisplay();
 
+    // Disable toolbar formatting (not allowed in formula mode)
+    if (this._context.updateToolbarState) {
+      this._context.updateToolbarState({}, true);
+    }
+
     Logger.log(this.getName(), `Formula mode for ${cellId}, pointing=${this._isPointing}, formula="${triggerKey}"`);
   }
 
@@ -176,6 +181,13 @@ export class FormulaMode extends NavigationMode {
       case INTENTS.DELETE:
         // Let browser handle delete/backspace in the input field
         return false;
+
+      // Formatting is NOT allowed in Formula mode (per spec)
+      // Formulas are code, not prose - formatting has no meaning
+      case INTENTS.FORMAT_BOLD:
+      case INTENTS.FORMAT_ITALIC:
+        Logger.log(this.getName(), 'Formatting ignored in Formula mode');
+        return true; // Consume the event but do nothing
 
       default:
         return super.handleIntent(intent, context);
