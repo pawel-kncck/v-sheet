@@ -302,57 +302,67 @@ function resolveStyle(cellStyle, textRunStyle) {
 
 ## UI Components
 
-### Formula Bar
+### Formula Bar (Existing Component)
 
-The formula bar is the primary location for text-level editing and formatting:
+The formula bar is an existing UI component that displays plain text only:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ [A1 ▼]  fx │ Hello World                                        │
-│            │ ^^^^^ (selected text can be formatted)             │
+│            │ ^^^^^ (selected text - formatting target)          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Key Behaviors:**
 - Displays content of the **anchor cell** (active cell in selection)
-- Supports text selection for text-level formatting
-- Text selection in formula bar + Ctrl+B → formats selected text in anchor cell
+- **Shows plain text only** - no rich text rendering (consistent with current implementation)
+- Supports text selection for **targeting** text-level formatting
+- Text selection in formula bar + Ctrl+B → formats corresponding range in anchor cell
 - Works in both Edit and Enter modes
-- Shows rich text with inline formatting (contenteditable)
+- Visual feedback of formatting appears **in the cell**, not in formula bar
 
 **Multi-Cell Selection Context:**
 - When multiple cells are selected, formula bar shows **anchor cell only**
-- Text-level formatting in formula bar applies to **anchor cell only**
+- Text-level formatting applies to **anchor cell only**
 - Cell-level formatting (Ready mode) applies to **all selected cells**
 - Double-clicking any cell **cancels multi-cell selection** and enters Edit mode for that cell
 
-### In-Cell Editor Changes
+### Cell Display (Rich Text Rendering)
 
-**Current:** Single `<input type="text">` element
-
-**Proposed:** `contenteditable` div with inline styling
+Cells display rich text with inline formatting:
 
 ```html
-<div id="cell-editor" contenteditable="true">
+<!-- Cell A1 in grid -->
+<div class="cell" data-cell-id="A1">
   <span style="font-style: italic;">Hello</span>
   <span style="font-weight: bold;"> World</span>
 </div>
 ```
 
+**Key Principle:** Formula bar = plain text editing interface. Cell = rich text display.
+
+### In-Cell Editor
+
+**Current:** Single `<input type="text">` element
+
+**Proposed:** Keep as plain text input (like formula bar)
+
+The in-cell editor mirrors the formula bar behavior:
+- Shows plain text while editing
+- Rich text formatting is applied when edit is committed
+- Selection in editor targets formatting range
+
+**Alternative:** Use `contenteditable` div with inline styling for WYSIWYG editing in-cell. This would show formatting while typing but adds complexity.
+
+**Recommendation:** Start with plain text editor (simpler), consider WYSIWYG as future enhancement.
+
 **Required Capabilities:**
-- Get/set text content (plain text for formulas)
+- Get/set text content
 - Get/set cursor position
 - Get/set selection range
-- Apply inline styles to selection
+- Track selection for formatting target
 - Track active style for insertion point
-- Sync styles from cell on edit start
-- Sync with formula bar (both should show same content/selection)
-
-**In-Cell vs Formula Bar:**
-- Both support text selection and formatting
-- In-cell editor is positioned over the cell being edited
-- Formula bar is always visible at the top
-- Selection state should be synchronized between them
+- Sync content with formula bar
 
 ### Toolbar State
 
@@ -598,9 +608,9 @@ Backend API unchanged:
 
 2. **Keyboard navigation in editor:** How does cursor movement interact with run boundaries?
 
-3. **Formula bar implementation:** Does v-sheet currently have a formula bar, or does this need to be built?
+3. **Run normalization:** When should adjacent identical runs be merged? On every edit, or lazily on save?
 
-4. **Run normalization:** When should adjacent identical runs be merged? On every edit, or lazily on save?
+4. **WYSIWYG in-cell editing:** Should the in-cell editor show formatting while typing, or remain plain text like the formula bar?
 
 ---
 
