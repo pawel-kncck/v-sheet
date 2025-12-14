@@ -339,30 +339,42 @@ Cells display rich text with inline formatting:
 </div>
 ```
 
-**Key Principle:** Formula bar = plain text editing interface. Cell = rich text display.
+**Key Principle:** Formula bar = plain text. In-cell editor & cell display = rich text.
 
-### In-Cell Editor
+### In-Cell Editor (WYSIWYG)
 
 **Current:** Single `<input type="text">` element
 
-**Proposed:** Keep as plain text input (like formula bar)
+**Proposed:** `contenteditable` div with inline styling for WYSIWYG editing
 
-The in-cell editor mirrors the formula bar behavior:
-- Shows plain text while editing
-- Rich text formatting is applied when edit is committed
-- Selection in editor targets formatting range
+```html
+<div id="cell-editor" contenteditable="true">
+  <span style="font-style: italic;">Hello</span>
+  <span style="font-weight: bold;"> World</span>
+</div>
+```
 
-**Alternative:** Use `contenteditable` div with inline styling for WYSIWYG editing in-cell. This would show formatting while typing but adds complexity.
+The in-cell editor displays rich text with live formatting:
+- Shows formatting while editing (WYSIWYG)
+- New text inherits active style and renders immediately with that style
+- Selection in editor can be formatted with Ctrl+B/I
+- Formatting changes are visible instantly
 
-**Recommendation:** Start with plain text editor (simpler), consider WYSIWYG as future enhancement.
+**Contrast with Formula Bar:**
+| Component | Display | Purpose |
+|-----------|---------|---------|
+| Formula bar | Plain text | Content editing, text selection for targeting |
+| In-cell editor | Rich text (WYSIWYG) | Visual editing with live formatting |
+| Cell display | Rich text | Final rendered view |
 
 **Required Capabilities:**
-- Get/set text content
+- Get/set rich text content (with formatting runs)
+- Get/set plain text content (for syncing with formula bar)
 - Get/set cursor position
 - Get/set selection range
-- Track selection for formatting target
-- Track active style for insertion point
-- Sync content with formula bar
+- Apply inline styles to selection or at cursor (active style)
+- Render new text with active style
+- Sync plain text content with formula bar (formatting not synced)
 
 ### Toolbar State
 
@@ -600,6 +612,11 @@ Backend API unchanged:
    - Text-level formatting requires text selection in formula bar, applies to anchor cell only
    - Double-clicking a cell cancels multi-cell selection and enters Edit mode for that cell
 
+4. **Rich text display:**
+   - Formula bar: Plain text only (no formatting visible)
+   - In-cell editor: WYSIWYG with live formatting
+   - Cell display: Rich text with formatting
+
 ---
 
 ## Open Questions
@@ -609,8 +626,6 @@ Backend API unchanged:
 2. **Keyboard navigation in editor:** How does cursor movement interact with run boundaries?
 
 3. **Run normalization:** When should adjacent identical runs be merged? On every edit, or lazily on save?
-
-4. **WYSIWYG in-cell editing:** Should the in-cell editor show formatting while typing, or remain plain text like the formula bar?
 
 ---
 
