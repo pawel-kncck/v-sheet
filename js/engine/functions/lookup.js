@@ -105,8 +105,311 @@ function _areValuesEqual(a, b) {
   return this.coerce.toString(a).toLowerCase() === this.coerce.toString(b).toLowerCase();
 }
 
+/**
+ * HLOOKUP: Searches for a value in the first row of a range and returns
+ * a value in the same column from a specified row.
+ *
+ * V1 Implementation: Only supports exact match (range_lookup = FALSE).
+ *
+ * @param {*} search_key - The value to search for in the first row.
+ * @param {Array} range - The range (2D array) to search in.
+ * @param {*} index - The row index (1-based) to return the value from.
+ * @param {*} [range_lookup=false] - If FALSE (default), exact match only.
+ * @returns {*} The value from the specified row in the matching column.
+ * @throws {NotAvailableError} If the value is not found.
+ * @throws {RefError} If the index is out of range.
+ * @throws {ValueError} If range_lookup is TRUE (not supported in V1).
+ */
+function HLOOKUP(search_key, range, index, range_lookup = false) {
+  // Validate range_lookup parameter (V1 only supports exact match)
+  const exactMatch = !this.coerce.toBoolean(range_lookup);
+  if (!exactMatch) {
+    throw new ValueError('HLOOKUP approximate match (TRUE) is not supported in V1');
+  }
+
+  // Validate that range is a 2D array
+  if (!Array.isArray(range) || range.length === 0) {
+    throw new RefError('Invalid range for HLOOKUP');
+  }
+
+  // Ensure all rows are arrays (2D structure)
+  if (!Array.isArray(range[0])) {
+    // If range is 1D, treat it as a single row
+    range = [range];
+  }
+
+  // Validate index
+  const rowIndex = this.coerce.toNumber(index);
+  if (rowIndex < 1 || rowIndex > range.length) {
+    throw new RefError('Row index is out of range');
+  }
+
+  // Convert search_key for comparison
+  const searchValue = search_key;
+
+  // Linear search through the first row
+  const firstRow = range[0];
+  for (let col = 0; col < firstRow.length; col++) {
+    const firstRowValue = firstRow[col];
+
+    // Exact match comparison
+    if (this._areValuesEqual(searchValue, firstRowValue)) {
+      // Return value from the specified row (convert from 1-based to 0-based)
+      return range[Math.floor(rowIndex) - 1][col];
+    }
+  }
+
+  // Value not found
+  throw new NotAvailableError(`Value "${search_key}" not found in lookup range`);
+}
+
+/**
+ * INDEX: Returns a value from a table or range based on row and column numbers.
+ *
+ * @param {Array} array - The range of cells or array.
+ * @param {*} row_num - The row position (1-based). Use 0 to return entire column.
+ * @param {*} [col_num=1] - The column position (1-based). Use 0 to return entire row.
+ * @returns {*} The value at the specified position, or a row/column array.
+ * @throws {RefError} If the position is out of range.
+ */
+function INDEX(array, row_num, col_num) {
+  // Validate array
+  if (!Array.isArray(array)) {
+    // Single value
+    if (row_num === 1 || row_num === undefined) {
+      return array;
+    }
+    throw new RefError('Invalid reference for INDEX');
+  }
+
+  // Ensure 2D array
+  let data = array;
+  if (!Array.isArray(data[0])) {
+    // 1D array - treat as single column
+    data = data.map(val => [val]);
+  }
+
+  const rowCount = data.length;
+  const colCount = data[0].length;
+
+  const row = row_num === undefined ? 1 : this.coerce.toNumber(row_num);
+  const col = col_num === undefined ? 1 : this.coerce.toNumber(col_num);
+
+  // Handle row = 0 (return entire column)
+  if (row === 0) {
+    if (col < 1 || col > colCount) {
+      throw new RefError('Column index out of range');
+    }
+    return data.map(r => r[col - 1]);
+  }
+
+  // Handle col = 0 (return entire row)
+  if (col === 0) {
+    if (row < 1 || row > rowCount) {
+      throw new RefError('Row index out of range');
+    }
+    return data[row - 1];
+  }
+
+  // Validate row and column
+  if (row < 1 || row > rowCount) {
+    throw new RefError('Row index out of range');
+  }
+  if (col < 1 || col > colCount) {
+    throw new RefError('Column index out of range');
+  }
+
+  return data[Math.floor(row) - 1][Math.floor(col) - 1];
+}
+
+/**
+ * MATCH: Returns the relative position of an item in an array that matches a specified value.
+ *
+ * @param {*} lookup_value - The value to search for.
+ * @param {Array} lookup_array - The range to search (must be 1D or single row/column).
+ * @param {*} [match_type=1] - The type of match:
+ *   1 = finds largest value <= lookup_value (array must be sorted ascending)
+ *   0 = exact match
+ *   -1 = finds smallest value >= lookup_value (array must be sorted descending)
+ * @returns {number} The position (1-based) of the found item.
+ * @throws {NotAvailableError} If no match is found.
+ */
+function MATCH(lookup_value, lookup_array, match_type = 1) {
+  // Flatten the array to 1D
+  let values = lookup_array;
+  if (Array.isArray(values)) {
+    values = values.flat(Infinity);
+  } else {
+    values = [values];
+  }
+
+  const matchMode = this.coerce.toNumber(match_type);
+
+  if (matchMode === 0) {
+    // Exact match
+    for (let i = 0; i < values.length; i++) {
+      if (this._areValuesEqual(lookup_value, values[i])) {
+        return i + 1; // 1-based index
+      }
+    }
+    throw new NotAvailableError('No exact match found');
+  }
+
+  if (matchMode === 1) {
+    // Find largest value <= lookup_value (sorted ascending)
+    const lookupNum = this.coerce.toNumber(lookup_value);
+    let lastValidIndex = -1;
+
+    for (let i = 0; i < values.length; i++) {
+      const val = this.coerce.toNumber(values[i]);
+      if (val <= lookupNum) {
+        lastValidIndex = i;
+      } else {
+        // Since array is sorted ascending, we can stop here
+        break;
+      }
+    }
+
+    if (lastValidIndex === -1) {
+      throw new NotAvailableError('No match found');
+    }
+    return lastValidIndex + 1;
+  }
+
+  if (matchMode === -1) {
+    // Find smallest value >= lookup_value (sorted descending)
+    const lookupNum = this.coerce.toNumber(lookup_value);
+    let lastValidIndex = -1;
+
+    for (let i = 0; i < values.length; i++) {
+      const val = this.coerce.toNumber(values[i]);
+      if (val >= lookupNum) {
+        lastValidIndex = i;
+      } else {
+        // Since array is sorted descending, we can stop here
+        break;
+      }
+    }
+
+    if (lastValidIndex === -1) {
+      throw new NotAvailableError('No match found');
+    }
+    return lastValidIndex + 1;
+  }
+
+  throw new ValueError('match_type must be -1, 0, or 1');
+}
+
+// ============================================
+// MEDIUM PRIORITY LOOKUP FUNCTIONS
+// ============================================
+
+/**
+ * ROW: Returns the row number of a reference.
+ * Note: In a full implementation, this would work with cell references.
+ * Here we accept an array and return row numbers, or just the row number if given one.
+ *
+ * @param {*} [reference] - A cell reference or array. If omitted, returns 1.
+ * @returns {number|Array} The row number(s).
+ */
+function ROW(reference) {
+  // If no reference, return 1 (would return current row in a full implementation)
+  if (reference === undefined) {
+    return 1;
+  }
+
+  // If reference is a 2D array, return array of row numbers
+  if (Array.isArray(reference)) {
+    if (Array.isArray(reference[0])) {
+      // 2D array - return column of row numbers
+      return reference.map((_, i) => i + 1);
+    }
+    // 1D array - return row numbers for each element
+    return reference.map((_, i) => i + 1);
+  }
+
+  // Single value - return 1
+  return 1;
+}
+
+/**
+ * COLUMN: Returns the column number of a reference.
+ * Note: In a full implementation, this would work with cell references.
+ * Here we accept an array and return column numbers, or just the column number if given one.
+ *
+ * @param {*} [reference] - A cell reference or array. If omitted, returns 1.
+ * @returns {number|Array} The column number(s).
+ */
+function COLUMN(reference) {
+  // If no reference, return 1 (would return current column in a full implementation)
+  if (reference === undefined) {
+    return 1;
+  }
+
+  // If reference is a 2D array, return row of column numbers
+  if (Array.isArray(reference)) {
+    if (Array.isArray(reference[0])) {
+      // 2D array - return row of column numbers (based on first row width)
+      return reference[0].map((_, i) => i + 1);
+    }
+    // 1D array treated as single row - return column numbers
+    return reference.map((_, i) => i + 1);
+  }
+
+  // Single value - return 1
+  return 1;
+}
+
+/**
+ * ROWS: Returns the number of rows in a reference or array.
+ *
+ * @param {*} array - A reference or array.
+ * @returns {number} The number of rows.
+ */
+function ROWS(array) {
+  if (!Array.isArray(array)) {
+    return 1;
+  }
+
+  // If it's a 2D array, return the number of rows
+  if (Array.isArray(array[0])) {
+    return array.length;
+  }
+
+  // If it's a 1D array treated as a column, return its length
+  return array.length;
+}
+
+/**
+ * COLUMNS: Returns the number of columns in a reference or array.
+ *
+ * @param {*} array - A reference or array.
+ * @returns {number} The number of columns.
+ */
+function COLUMNS(array) {
+  if (!Array.isArray(array)) {
+    return 1;
+  }
+
+  // If it's a 2D array, return the number of columns in the first row
+  if (Array.isArray(array[0])) {
+    return array[0].length;
+  }
+
+  // If it's a 1D array treated as a row, return its length
+  return array.length;
+}
+
 // Export all functions as an object
 export const lookupFunctions = {
   VLOOKUP,
+  HLOOKUP,
+  INDEX,
+  MATCH,
+  // Medium priority
+  ROW,
+  COLUMN,
+  ROWS,
+  COLUMNS,
   _areValuesEqual, // Export for testing
 };

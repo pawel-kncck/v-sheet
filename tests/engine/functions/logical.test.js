@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Evaluator } from '../../../js/engine/Evaluator.js';
 import { FunctionRegistry } from '../../../js/engine/FunctionRegistry.js';
 import { registerFunctions } from '../../../js/engine/functions/register.js';
 import { TypeCoercion } from '../../../js/engine/utils/TypeCoercion.js';
+import { ValueError, NotAvailableError, FormulaError, DivZeroError } from '../../../js/engine/utils/FormulaErrors.js';
 
 describe('Logical Functions', () => {
   let funcs;
@@ -22,6 +23,16 @@ describe('Logical Functions', () => {
       AND: registry.get('AND').bind(mockEvaluator),
       OR: registry.get('OR').bind(mockEvaluator),
       NOT: registry.get('NOT').bind(mockEvaluator),
+      IFS: registry.get('IFS').bind(mockEvaluator),
+      IFERROR: registry.get('IFERROR').bind(mockEvaluator),
+      // Medium priority
+      IFNA: registry.get('IFNA').bind(mockEvaluator),
+      XOR: registry.get('XOR').bind(mockEvaluator),
+      SWITCH: registry.get('SWITCH').bind(mockEvaluator),
+      CHOOSE: registry.get('CHOOSE').bind(mockEvaluator),
+      // Low priority
+      TRUE: registry.get('TRUE').bind(mockEvaluator),
+      FALSE: registry.get('FALSE').bind(mockEvaluator),
     };
   });
 
@@ -127,6 +138,159 @@ describe('Logical Functions', () => {
       expect(funcs.NOT(100)).toBe(false);
       expect(funcs.NOT(-1)).toBe(false);
       expect(funcs.NOT(0.0)).toBe(true);
+    });
+  });
+
+  describe('IFS', () => {
+    it('should return value for first true condition', () => {
+      expect(funcs.IFS(true, 'A', true, 'B')).toBe('A');
+      expect(funcs.IFS(false, 'A', true, 'B')).toBe('B');
+    });
+
+    it('should handle multiple conditions', () => {
+      expect(funcs.IFS(false, 'A', false, 'B', true, 'C')).toBe('C');
+    });
+
+    it('should work with numeric conditions', () => {
+      expect(funcs.IFS(0, 'A', 1, 'B')).toBe('B');
+    });
+
+    it('should throw error for no true condition', () => {
+      expect(() => funcs.IFS(false, 'A', false, 'B')).toThrow(NotAvailableError);
+    });
+
+    it('should throw error for odd number of arguments', () => {
+      expect(() => funcs.IFS(true, 'A', true)).toThrow(ValueError);
+    });
+
+    it('should throw error for no arguments', () => {
+      expect(() => funcs.IFS()).toThrow(ValueError);
+    });
+  });
+
+  describe('IFERROR', () => {
+    it('should return original value if not an error', () => {
+      expect(funcs.IFERROR(42, 'error')).toBe(42);
+      expect(funcs.IFERROR('hello', 'error')).toBe('hello');
+      expect(funcs.IFERROR(0, 'error')).toBe(0);
+    });
+
+    it('should return error value for FormulaError instances', () => {
+      const divError = new DivZeroError();
+      expect(funcs.IFERROR(divError, 'Division error')).toBe('Division error');
+    });
+
+    it('should return error value for error strings', () => {
+      expect(funcs.IFERROR('#DIV/0!', 0)).toBe(0);
+      expect(funcs.IFERROR('#N/A', 'Not found')).toBe('Not found');
+      expect(funcs.IFERROR('#VALUE!', 'Invalid')).toBe('Invalid');
+      expect(funcs.IFERROR('#REF!', 'Bad ref')).toBe('Bad ref');
+    });
+
+    it('should be case-insensitive for error strings', () => {
+      expect(funcs.IFERROR('#div/0!', 0)).toBe(0);
+      expect(funcs.IFERROR('#n/a', 'Not found')).toBe('Not found');
+    });
+
+    it('should not treat normal strings as errors', () => {
+      expect(funcs.IFERROR('hello', 'error')).toBe('hello');
+      expect(funcs.IFERROR('DIV', 'error')).toBe('DIV');
+    });
+  });
+
+  // ============================================
+  // MEDIUM PRIORITY LOGICAL FUNCTION TESTS
+  // ============================================
+
+  describe('IFNA', () => {
+    it('should return original value if not #N/A', () => {
+      expect(funcs.IFNA(42, 'default')).toBe(42);
+      expect(funcs.IFNA('hello', 'default')).toBe('hello');
+    });
+
+    it('should return default for #N/A string', () => {
+      expect(funcs.IFNA('#N/A', 'default')).toBe('default');
+    });
+
+    it('should return default for NotAvailableError', () => {
+      const naError = new NotAvailableError();
+      expect(funcs.IFNA(naError, 'Not found')).toBe('Not found');
+    });
+
+    it('should not catch other errors', () => {
+      expect(funcs.IFNA('#DIV/0!', 'default')).toBe('#DIV/0!');
+      expect(funcs.IFNA('#VALUE!', 'default')).toBe('#VALUE!');
+    });
+  });
+
+  describe('XOR', () => {
+    it('should return TRUE for odd number of TRUE values', () => {
+      expect(funcs.XOR(true, false, false)).toBe(true);
+      expect(funcs.XOR(true, true, true)).toBe(true);
+    });
+
+    it('should return FALSE for even number of TRUE values', () => {
+      expect(funcs.XOR(true, true)).toBe(false);
+      expect(funcs.XOR(true, false, true, false)).toBe(false);
+    });
+
+    it('should return FALSE for all FALSE', () => {
+      expect(funcs.XOR(false, false)).toBe(false);
+    });
+
+    it('should handle arrays', () => {
+      expect(funcs.XOR([true, false, false])).toBe(true);
+    });
+  });
+
+  describe('SWITCH', () => {
+    it('should return matching value', () => {
+      expect(funcs.SWITCH(2, 1, 'one', 2, 'two', 3, 'three')).toBe('two');
+    });
+
+    it('should return default value when no match', () => {
+      expect(funcs.SWITCH(4, 1, 'one', 2, 'two', 'default')).toBe('default');
+    });
+
+    it('should throw error when no match and no default', () => {
+      expect(() => funcs.SWITCH(4, 1, 'one', 2, 'two')).toThrow(NotAvailableError);
+    });
+
+    it('should be case-insensitive for strings', () => {
+      expect(funcs.SWITCH('A', 'a', 'matched', 'no match')).toBe('matched');
+    });
+  });
+
+  describe('CHOOSE', () => {
+    it('should return value at index', () => {
+      expect(funcs.CHOOSE(1, 'a', 'b', 'c')).toBe('a');
+      expect(funcs.CHOOSE(2, 'a', 'b', 'c')).toBe('b');
+      expect(funcs.CHOOSE(3, 'a', 'b', 'c')).toBe('c');
+    });
+
+    it('should throw error for index out of range', () => {
+      expect(() => funcs.CHOOSE(0, 'a', 'b')).toThrow(ValueError);
+      expect(() => funcs.CHOOSE(4, 'a', 'b', 'c')).toThrow(ValueError);
+    });
+
+    it('should handle decimal indices (floor)', () => {
+      expect(funcs.CHOOSE(1.9, 'a', 'b', 'c')).toBe('a');
+    });
+  });
+
+  // ============================================
+  // LOW PRIORITY LOGICAL FUNCTION TESTS
+  // ============================================
+
+  describe('TRUE', () => {
+    it('should return true', () => {
+      expect(funcs.TRUE()).toBe(true);
+    });
+  });
+
+  describe('FALSE', () => {
+    it('should return false', () => {
+      expect(funcs.FALSE()).toBe(false);
     });
   });
 });
