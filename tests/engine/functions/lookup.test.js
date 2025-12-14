@@ -22,6 +22,9 @@ describe('Lookup Functions', () => {
     // Bind lookup functions to the mock context
     funcs = {
       VLOOKUP: registry.get('VLOOKUP').bind(mockEvaluator),
+      HLOOKUP: registry.get('HLOOKUP').bind(mockEvaluator),
+      INDEX: registry.get('INDEX').bind(mockEvaluator),
+      MATCH: registry.get('MATCH').bind(mockEvaluator),
     };
   });
 
@@ -130,6 +133,158 @@ describe('Lookup Functions', () => {
     it('should handle default range_lookup parameter (FALSE)', () => {
       const range = [['Apple', 10]];
       expect(funcs.VLOOKUP('Apple', range, 2)).toBe(10);
+    });
+  });
+
+  describe('HLOOKUP', () => {
+    it('should find exact match in 2D array', () => {
+      const range = [
+        ['Apple', 'Banana', 'Cherry'],
+        [10, 20, 30],
+        ['Red', 'Yellow', 'Red'],
+      ];
+      expect(funcs.HLOOKUP('Banana', range, 2, false)).toBe(20);
+      expect(funcs.HLOOKUP('Cherry', range, 3, false)).toBe('Red');
+    });
+
+    it('should be case-insensitive for string matching', () => {
+      const range = [
+        ['Apple', 'Banana'],
+        [10, 20],
+      ];
+      expect(funcs.HLOOKUP('apple', range, 2, false)).toBe(10);
+      expect(funcs.HLOOKUP('BANANA', range, 2, false)).toBe(20);
+    });
+
+    it('should handle numeric search keys', () => {
+      const range = [
+        [1, 2, 3],
+        ['One', 'Two', 'Three'],
+      ];
+      expect(funcs.HLOOKUP(2, range, 2, false)).toBe('Two');
+    });
+
+    it('should throw #N/A when value not found', () => {
+      const range = [
+        ['Apple', 'Banana'],
+        [10, 20],
+      ];
+      expect(() => funcs.HLOOKUP('Orange', range, 2, false)).toThrow(NotAvailableError);
+    });
+
+    it('should throw #REF! when row index is out of range', () => {
+      const range = [
+        ['Apple', 'Banana'],
+        [10, 20],
+      ];
+      expect(() => funcs.HLOOKUP('Apple', range, 3, false)).toThrow(RefError);
+      expect(() => funcs.HLOOKUP('Apple', range, 0, false)).toThrow(RefError);
+    });
+
+    it('should handle 1D array (treat as single row)', () => {
+      const range = ['Apple', 'Banana', 'Cherry'];
+      expect(funcs.HLOOKUP('Banana', range, 1, false)).toBe('Banana');
+    });
+  });
+
+  describe('INDEX', () => {
+    it('should return value at row and column', () => {
+      const array = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+      ];
+      expect(funcs.INDEX(array, 2, 3)).toBe(6);
+      expect(funcs.INDEX(array, 1, 1)).toBe(1);
+      expect(funcs.INDEX(array, 3, 2)).toBe(8);
+    });
+
+    it('should return entire row when col_num is 0', () => {
+      const array = [
+        [1, 2, 3],
+        [4, 5, 6],
+      ];
+      expect(funcs.INDEX(array, 2, 0)).toEqual([4, 5, 6]);
+    });
+
+    it('should return entire column when row_num is 0', () => {
+      const array = [
+        [1, 2, 3],
+        [4, 5, 6],
+      ];
+      expect(funcs.INDEX(array, 0, 2)).toEqual([2, 5]);
+    });
+
+    it('should handle 1D array', () => {
+      const array = [10, 20, 30, 40];
+      expect(funcs.INDEX(array, 2)).toBe(20);
+      expect(funcs.INDEX(array, 4)).toBe(40);
+    });
+
+    it('should throw #REF! for invalid row', () => {
+      const array = [[1, 2], [3, 4]];
+      expect(() => funcs.INDEX(array, 5, 1)).toThrow(RefError);
+      expect(() => funcs.INDEX(array, -1, 1)).toThrow(RefError);
+    });
+
+    it('should throw #REF! for invalid column', () => {
+      const array = [[1, 2], [3, 4]];
+      expect(() => funcs.INDEX(array, 1, 5)).toThrow(RefError);
+    });
+
+    it('should handle single value', () => {
+      expect(funcs.INDEX(42, 1)).toBe(42);
+    });
+  });
+
+  describe('MATCH', () => {
+    it('should find exact match (match_type 0)', () => {
+      const array = ['Apple', 'Banana', 'Cherry'];
+      expect(funcs.MATCH('Banana', array, 0)).toBe(2);
+      expect(funcs.MATCH('Apple', array, 0)).toBe(1);
+    });
+
+    it('should be case-insensitive for exact match', () => {
+      const array = ['Apple', 'Banana', 'Cherry'];
+      expect(funcs.MATCH('banana', array, 0)).toBe(2);
+      expect(funcs.MATCH('CHERRY', array, 0)).toBe(3);
+    });
+
+    it('should find largest value <= lookup (match_type 1)', () => {
+      const array = [10, 20, 30, 40];
+      expect(funcs.MATCH(25, array, 1)).toBe(2); // 20 is largest <= 25
+      expect(funcs.MATCH(30, array, 1)).toBe(3);
+      expect(funcs.MATCH(50, array, 1)).toBe(4);
+    });
+
+    it('should find smallest value >= lookup (match_type -1)', () => {
+      const array = [40, 30, 20, 10];
+      expect(funcs.MATCH(25, array, -1)).toBe(2); // 30 is smallest >= 25
+      expect(funcs.MATCH(30, array, -1)).toBe(2);
+    });
+
+    it('should throw #N/A for no exact match', () => {
+      const array = ['Apple', 'Banana'];
+      expect(() => funcs.MATCH('Orange', array, 0)).toThrow(NotAvailableError);
+    });
+
+    it('should throw #N/A for no match in sorted array', () => {
+      const array = [10, 20, 30];
+      expect(() => funcs.MATCH(5, array, 1)).toThrow(NotAvailableError);
+    });
+
+    it('should handle nested arrays', () => {
+      const array = [[10], [20], [30]];
+      expect(funcs.MATCH(20, array, 0)).toBe(2);
+    });
+
+    it('should default to match_type 1', () => {
+      const array = [10, 20, 30];
+      expect(funcs.MATCH(25, array)).toBe(2);
+    });
+
+    it('should throw error for invalid match_type', () => {
+      expect(() => funcs.MATCH(1, [1, 2], 2)).toThrow(ValueError);
     });
   });
 });

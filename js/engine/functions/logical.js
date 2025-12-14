@@ -9,8 +9,7 @@
  * giving us access to `this.coerce` and other utilities.
  */
 
-// We will import TypeCoercion and Error types in the final
-// version. For now, we assume `this.coerce` is available.
+import { FormulaError, ValueError, NotAvailableError } from '../utils/FormulaErrors.js';
 
 /**
  * IF: Returns one value if a logical expression is 'true'
@@ -97,10 +96,69 @@ function NOT(logical) {
   return !this.coerce.toBoolean(logical);
 }
 
+/**
+ * IFS: Checks multiple conditions and returns the value corresponding
+ * to the first TRUE condition.
+ *
+ * @param {...any} args - Pairs of (condition, value) arguments.
+ * @returns {*} The value corresponding to the first TRUE condition.
+ * @throws {NotAvailableError} If no condition is TRUE.
+ * @throws {ValueError} If arguments are not in pairs.
+ */
+function IFS(...args) {
+  // Arguments should be in pairs: condition1, value1, condition2, value2, ...
+  if (args.length === 0 || args.length % 2 !== 0) {
+    throw new ValueError('IFS requires arguments in pairs (condition, value)');
+  }
+
+  for (let i = 0; i < args.length; i += 2) {
+    const condition = args[i];
+    const value = args[i + 1];
+
+    if (this.coerce.toBoolean(condition)) {
+      return value;
+    }
+  }
+
+  // No condition was TRUE
+  throw new NotAvailableError('No matching condition in IFS');
+}
+
+/**
+ * IFERROR: Returns a specified value if a formula evaluates to an error;
+ * otherwise, returns the result of the formula.
+ *
+ * Note: Since we can't actually catch errors from other formula evaluations
+ * in this context, this function checks if the value is a FormulaError instance
+ * or a string that looks like an error (e.g., "#DIV/0!").
+ *
+ * @param {*} value - The value or expression to check for an error.
+ * @param {*} value_if_error - The value to return if the first argument is an error.
+ * @returns {*} The original value if not an error, otherwise value_if_error.
+ */
+function IFERROR(value, value_if_error) {
+  // Check if value is a FormulaError instance
+  if (value instanceof FormulaError) {
+    return value_if_error;
+  }
+
+  // Check if value is a string that looks like an error
+  if (typeof value === 'string') {
+    const errorPatterns = ['#DIV/0!', '#N/A', '#NAME?', '#NULL!', '#NUM!', '#REF!', '#VALUE!'];
+    if (errorPatterns.includes(value.toUpperCase())) {
+      return value_if_error;
+    }
+  }
+
+  return value;
+}
+
 // Export all functions as an object
 export const logicalFunctions = {
   IF,
   AND,
   OR,
   NOT,
+  IFS,
+  IFERROR,
 };

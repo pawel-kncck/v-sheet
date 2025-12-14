@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Evaluator } from '../../../js/engine/Evaluator.js';
 import { FunctionRegistry } from '../../../js/engine/FunctionRegistry.js';
 import { registerFunctions } from '../../../js/engine/functions/register.js';
 import { TypeCoercion } from '../../../js/engine/utils/TypeCoercion.js';
+import { ValueError, NotAvailableError, FormulaError, DivZeroError } from '../../../js/engine/utils/FormulaErrors.js';
 
 describe('Logical Functions', () => {
   let funcs;
@@ -22,6 +23,8 @@ describe('Logical Functions', () => {
       AND: registry.get('AND').bind(mockEvaluator),
       OR: registry.get('OR').bind(mockEvaluator),
       NOT: registry.get('NOT').bind(mockEvaluator),
+      IFS: registry.get('IFS').bind(mockEvaluator),
+      IFERROR: registry.get('IFERROR').bind(mockEvaluator),
     };
   });
 
@@ -127,6 +130,63 @@ describe('Logical Functions', () => {
       expect(funcs.NOT(100)).toBe(false);
       expect(funcs.NOT(-1)).toBe(false);
       expect(funcs.NOT(0.0)).toBe(true);
+    });
+  });
+
+  describe('IFS', () => {
+    it('should return value for first true condition', () => {
+      expect(funcs.IFS(true, 'A', true, 'B')).toBe('A');
+      expect(funcs.IFS(false, 'A', true, 'B')).toBe('B');
+    });
+
+    it('should handle multiple conditions', () => {
+      expect(funcs.IFS(false, 'A', false, 'B', true, 'C')).toBe('C');
+    });
+
+    it('should work with numeric conditions', () => {
+      expect(funcs.IFS(0, 'A', 1, 'B')).toBe('B');
+    });
+
+    it('should throw error for no true condition', () => {
+      expect(() => funcs.IFS(false, 'A', false, 'B')).toThrow(NotAvailableError);
+    });
+
+    it('should throw error for odd number of arguments', () => {
+      expect(() => funcs.IFS(true, 'A', true)).toThrow(ValueError);
+    });
+
+    it('should throw error for no arguments', () => {
+      expect(() => funcs.IFS()).toThrow(ValueError);
+    });
+  });
+
+  describe('IFERROR', () => {
+    it('should return original value if not an error', () => {
+      expect(funcs.IFERROR(42, 'error')).toBe(42);
+      expect(funcs.IFERROR('hello', 'error')).toBe('hello');
+      expect(funcs.IFERROR(0, 'error')).toBe(0);
+    });
+
+    it('should return error value for FormulaError instances', () => {
+      const divError = new DivZeroError();
+      expect(funcs.IFERROR(divError, 'Division error')).toBe('Division error');
+    });
+
+    it('should return error value for error strings', () => {
+      expect(funcs.IFERROR('#DIV/0!', 0)).toBe(0);
+      expect(funcs.IFERROR('#N/A', 'Not found')).toBe('Not found');
+      expect(funcs.IFERROR('#VALUE!', 'Invalid')).toBe('Invalid');
+      expect(funcs.IFERROR('#REF!', 'Bad ref')).toBe('Bad ref');
+    });
+
+    it('should be case-insensitive for error strings', () => {
+      expect(funcs.IFERROR('#div/0!', 0)).toBe(0);
+      expect(funcs.IFERROR('#n/a', 'Not found')).toBe('Not found');
+    });
+
+    it('should not treat normal strings as errors', () => {
+      expect(funcs.IFERROR('hello', 'error')).toBe('hello');
+      expect(funcs.IFERROR('DIV', 'error')).toBe('DIV');
     });
   });
 });

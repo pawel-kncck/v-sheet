@@ -9,7 +9,7 @@
  * giving us access to `this.coerce` and other utilities.
  */
 
-import { ValueError, NumError } from '../utils/FormulaErrors.js';
+import { ValueError, NumError, DivZeroError } from '../utils/FormulaErrors.js';
 
 /**
  * SUM: Adds all numbers in a range of cells.
@@ -306,6 +306,225 @@ function SUMPRODUCT(...arrays) {
   return sum;
 }
 
+/**
+ * ABS: Returns the absolute value of a number.
+ *
+ * @param {*} value - The number to get the absolute value of.
+ * @returns {number} The absolute value.
+ */
+function ABS(value) {
+  const num = this.coerce.toNumber(value);
+  return Math.abs(num);
+}
+
+/**
+ * CEILING: Rounds a number up to the nearest multiple of significance.
+ *
+ * @param {*} number - The value to round.
+ * @param {*} [significance=1] - The multiple to round up to.
+ * @returns {number} The rounded number.
+ */
+function CEILING(number, significance = 1) {
+  const num = this.coerce.toNumber(number);
+  const sig = this.coerce.toNumber(significance);
+
+  if (sig === 0) {
+    return 0;
+  }
+
+  // Handle negative numbers with negative significance
+  if (num < 0 && sig > 0) {
+    return -Math.floor(Math.abs(num) / sig) * sig;
+  }
+
+  return Math.ceil(num / sig) * sig;
+}
+
+/**
+ * FLOOR: Rounds a number down to the nearest multiple of significance.
+ *
+ * @param {*} number - The value to round.
+ * @param {*} [significance=1] - The multiple to round down to.
+ * @returns {number} The rounded number.
+ */
+function FLOOR(number, significance = 1) {
+  const num = this.coerce.toNumber(number);
+  const sig = this.coerce.toNumber(significance);
+
+  if (sig === 0) {
+    return 0;
+  }
+
+  // Handle negative numbers with negative significance
+  if (num < 0 && sig > 0) {
+    return -Math.ceil(Math.abs(num) / sig) * sig;
+  }
+
+  return Math.floor(num / sig) * sig;
+}
+
+/**
+ * INT: Rounds a number down to the nearest integer.
+ *
+ * @param {*} value - The number to round down.
+ * @returns {number} The integer part.
+ */
+function INT(value) {
+  const num = this.coerce.toNumber(value);
+  return Math.floor(num);
+}
+
+/**
+ * MOD: Returns the remainder after division.
+ *
+ * @param {*} number - The dividend.
+ * @param {*} divisor - The divisor.
+ * @returns {number} The remainder.
+ * @throws {DivZeroError} If divisor is zero.
+ */
+function MOD(number, divisor) {
+  const num = this.coerce.toNumber(number);
+  const div = this.coerce.toNumber(divisor);
+
+  if (div === 0) {
+    throw new DivZeroError('Cannot divide by zero in MOD');
+  }
+
+  // JavaScript's % operator doesn't match Excel's behavior for negative numbers
+  // Excel's MOD always returns a value with the same sign as the divisor
+  const result = num % div;
+  if (result !== 0 && (result < 0) !== (div < 0)) {
+    return result + div;
+  }
+  return result;
+}
+
+/**
+ * POWER: Returns the result of a number raised to a power.
+ *
+ * @param {*} number - The base number.
+ * @param {*} power - The exponent.
+ * @returns {number} The result.
+ * @throws {NumError} If the result is not a real number.
+ */
+function POWER(number, power) {
+  const base = this.coerce.toNumber(number);
+  const exp = this.coerce.toNumber(power);
+
+  const result = Math.pow(base, exp);
+
+  if (isNaN(result) || !isFinite(result)) {
+    throw new NumError('Result is not a real number');
+  }
+
+  return result;
+}
+
+/**
+ * SQRT: Returns the square root of a number.
+ *
+ * @param {*} value - The number to get the square root of.
+ * @returns {number} The square root.
+ * @throws {NumError} If the number is negative.
+ */
+function SQRT(value) {
+  const num = this.coerce.toNumber(value);
+
+  if (num < 0) {
+    throw new NumError('Cannot calculate square root of negative number');
+  }
+
+  return Math.sqrt(num);
+}
+
+/**
+ * PRODUCT: Multiplies all the numbers given as arguments.
+ *
+ * @param {...any} args - A variable number of arguments.
+ * @returns {number} The product of all numeric values.
+ */
+function PRODUCT(...args) {
+  const values = args.flat(Infinity);
+
+  // Filter only numeric values
+  const numbers = values.filter(v => {
+    if (typeof v === 'number') return true;
+    if (typeof v === 'string' && v !== '') {
+      const num = parseFloat(v);
+      return !isNaN(num) && /^-?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i.test(v.trim());
+    }
+    return false;
+  });
+
+  if (numbers.length === 0) {
+    return 0;
+  }
+
+  return numbers.reduce((acc, val) => acc * this.coerce.toNumber(val), 1);
+}
+
+/**
+ * COUNTIF: Counts the number of cells that meet a specified criterion.
+ *
+ * @param {Array} range - The range of cells to count.
+ * @param {*} criteria - The condition to test (e.g., ">10", "Apple", 5).
+ * @returns {number} The count of cells meeting the criteria.
+ */
+function COUNTIF(range, criteria) {
+  // Flatten the range
+  const values = Array.isArray(range) ? range.flat(Infinity) : [range];
+
+  // Parse the criteria
+  const criteriaTest = this._parseCriteria(criteria);
+
+  // Count values where criteria is met
+  let count = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (criteriaTest(values[i])) {
+      count++;
+    }
+  }
+
+  return count;
+}
+
+/**
+ * MEDIAN: Returns the median of the given numbers.
+ *
+ * @param {...any} args - A variable number of arguments.
+ * @returns {number} The median value.
+ */
+function MEDIAN(...args) {
+  const values = args.flat(Infinity);
+
+  // Filter only numeric values
+  const numbers = values.filter(v => {
+    if (typeof v === 'number') return true;
+    if (typeof v === 'string' && v !== '') {
+      const num = parseFloat(v);
+      return !isNaN(num) && /^-?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i.test(v.trim());
+    }
+    return false;
+  }).map(v => this.coerce.toNumber(v));
+
+  if (numbers.length === 0) {
+    throw new NumError('MEDIAN requires at least one numeric value');
+  }
+
+  // Sort numbers
+  numbers.sort((a, b) => a - b);
+
+  const mid = Math.floor(numbers.length / 2);
+
+  if (numbers.length % 2 === 0) {
+    // Even number of values - average of two middle values
+    return (numbers[mid - 1] + numbers[mid]) / 2;
+  } else {
+    // Odd number of values - middle value
+    return numbers[mid];
+  }
+}
+
 // Export all functions as an object
 export const mathFunctions = {
   SUM,
@@ -317,5 +536,15 @@ export const mathFunctions = {
   ROUND,
   SUMIF,
   SUMPRODUCT,
+  ABS,
+  CEILING,
+  FLOOR,
+  INT,
+  MOD,
+  POWER,
+  SQRT,
+  PRODUCT,
+  COUNTIF,
+  MEDIAN,
   _parseCriteria, // Export for testing
 };

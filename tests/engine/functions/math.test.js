@@ -3,7 +3,7 @@ import { Evaluator } from '../../../js/engine/Evaluator.js';
 import { FunctionRegistry } from '../../../js/engine/FunctionRegistry.js';
 import { registerFunctions } from '../../../js/engine/functions/register.js';
 import { TypeCoercion } from '../../../js/engine/utils/TypeCoercion.js';
-import { ValueError } from '../../../js/engine/utils/FormulaErrors.js';
+import { ValueError, NumError, DivZeroError } from '../../../js/engine/utils/FormulaErrors.js';
 import { mathFunctions } from '../../../js/engine/functions/math.js';
 
 describe('Math Functions', () => {
@@ -33,6 +33,16 @@ describe('Math Functions', () => {
       ROUND: registry.get('ROUND').bind(mockEvaluator),
       SUMIF: registry.get('SUMIF').bind(mockEvaluator),
       SUMPRODUCT: registry.get('SUMPRODUCT').bind(mockEvaluator),
+      ABS: registry.get('ABS').bind(mockEvaluator),
+      CEILING: registry.get('CEILING').bind(mockEvaluator),
+      FLOOR: registry.get('FLOOR').bind(mockEvaluator),
+      INT: registry.get('INT').bind(mockEvaluator),
+      MOD: registry.get('MOD').bind(mockEvaluator),
+      POWER: registry.get('POWER').bind(mockEvaluator),
+      SQRT: registry.get('SQRT').bind(mockEvaluator),
+      PRODUCT: registry.get('PRODUCT').bind(mockEvaluator),
+      COUNTIF: registry.get('COUNTIF').bind(mockEvaluator),
+      MEDIAN: registry.get('MEDIAN').bind(mockEvaluator),
     };
   });
 
@@ -244,6 +254,217 @@ describe('Math Functions', () => {
 
     it('should return 0 for empty arrays', () => {
       expect(funcs.SUMPRODUCT()).toBe(0);
+    });
+  });
+
+  describe('ABS', () => {
+    it('should return absolute value of positive numbers', () => {
+      expect(funcs.ABS(5)).toBe(5);
+      expect(funcs.ABS(123.45)).toBe(123.45);
+    });
+
+    it('should return absolute value of negative numbers', () => {
+      expect(funcs.ABS(-5)).toBe(5);
+      expect(funcs.ABS(-123.45)).toBe(123.45);
+    });
+
+    it('should return 0 for 0', () => {
+      expect(funcs.ABS(0)).toBe(0);
+    });
+
+    it('should coerce strings to numbers', () => {
+      expect(funcs.ABS('-10')).toBe(10);
+    });
+  });
+
+  describe('CEILING', () => {
+    it('should round up to nearest integer by default', () => {
+      expect(funcs.CEILING(2.1)).toBe(3);
+      expect(funcs.CEILING(2.9)).toBe(3);
+    });
+
+    it('should round up to specified significance', () => {
+      expect(funcs.CEILING(2.5, 1)).toBe(3);
+      expect(funcs.CEILING(2.1, 0.5)).toBe(2.5);
+      expect(funcs.CEILING(7, 5)).toBe(10);
+    });
+
+    it('should handle negative numbers', () => {
+      expect(funcs.CEILING(-2.1, 1)).toBe(-2);
+      expect(funcs.CEILING(-2.9, 1)).toBe(-2);
+    });
+
+    it('should return 0 for significance of 0', () => {
+      expect(funcs.CEILING(5, 0)).toBe(0);
+    });
+  });
+
+  describe('FLOOR', () => {
+    it('should round down to nearest integer by default', () => {
+      expect(funcs.FLOOR(2.1)).toBe(2);
+      expect(funcs.FLOOR(2.9)).toBe(2);
+    });
+
+    it('should round down to specified significance', () => {
+      expect(funcs.FLOOR(2.5, 1)).toBe(2);
+      expect(funcs.FLOOR(2.7, 0.5)).toBe(2.5);
+      expect(funcs.FLOOR(7, 5)).toBe(5);
+    });
+
+    it('should handle negative numbers', () => {
+      expect(funcs.FLOOR(-2.1, 1)).toBe(-3);
+      expect(funcs.FLOOR(-2.9, 1)).toBe(-3);
+    });
+
+    it('should return 0 for significance of 0', () => {
+      expect(funcs.FLOOR(5, 0)).toBe(0);
+    });
+  });
+
+  describe('INT', () => {
+    it('should round down positive numbers to integer', () => {
+      expect(funcs.INT(5.7)).toBe(5);
+      expect(funcs.INT(5.1)).toBe(5);
+    });
+
+    it('should round down negative numbers to integer', () => {
+      expect(funcs.INT(-5.1)).toBe(-6);
+      expect(funcs.INT(-5.7)).toBe(-6);
+    });
+
+    it('should return integer unchanged', () => {
+      expect(funcs.INT(5)).toBe(5);
+      expect(funcs.INT(-5)).toBe(-5);
+    });
+  });
+
+  describe('MOD', () => {
+    it('should return remainder of division', () => {
+      expect(funcs.MOD(10, 3)).toBe(1);
+      expect(funcs.MOD(7, 2)).toBe(1);
+      expect(funcs.MOD(8, 4)).toBe(0);
+    });
+
+    it('should handle negative dividend with positive divisor', () => {
+      // Excel MOD returns value with same sign as divisor
+      expect(funcs.MOD(-10, 3)).toBe(2);
+    });
+
+    it('should handle positive dividend with negative divisor', () => {
+      expect(funcs.MOD(10, -3)).toBe(-2);
+    });
+
+    it('should throw error for division by zero', () => {
+      expect(() => funcs.MOD(10, 0)).toThrow(DivZeroError);
+    });
+  });
+
+  describe('POWER', () => {
+    it('should raise number to a power', () => {
+      expect(funcs.POWER(2, 3)).toBe(8);
+      expect(funcs.POWER(5, 2)).toBe(25);
+      expect(funcs.POWER(10, 0)).toBe(1);
+    });
+
+    it('should handle negative exponents', () => {
+      expect(funcs.POWER(2, -1)).toBe(0.5);
+      expect(funcs.POWER(4, -0.5)).toBe(0.5);
+    });
+
+    it('should handle fractional exponents', () => {
+      expect(funcs.POWER(4, 0.5)).toBe(2);
+      expect(funcs.POWER(27, 1/3)).toBeCloseTo(3, 10);
+    });
+
+    it('should throw error for invalid results', () => {
+      expect(() => funcs.POWER(-1, 0.5)).toThrow(NumError);
+    });
+  });
+
+  describe('SQRT', () => {
+    it('should return square root', () => {
+      expect(funcs.SQRT(4)).toBe(2);
+      expect(funcs.SQRT(9)).toBe(3);
+      expect(funcs.SQRT(2)).toBeCloseTo(1.414, 3);
+    });
+
+    it('should return 0 for 0', () => {
+      expect(funcs.SQRT(0)).toBe(0);
+    });
+
+    it('should throw error for negative numbers', () => {
+      expect(() => funcs.SQRT(-1)).toThrow(NumError);
+    });
+  });
+
+  describe('PRODUCT', () => {
+    it('should multiply numbers', () => {
+      expect(funcs.PRODUCT(2, 3, 4)).toBe(24);
+      expect(funcs.PRODUCT(5, 10)).toBe(50);
+    });
+
+    it('should handle single number', () => {
+      expect(funcs.PRODUCT(5)).toBe(5);
+    });
+
+    it('should ignore non-numeric values', () => {
+      expect(funcs.PRODUCT(2, 'text', 3)).toBe(6);
+    });
+
+    it('should return 0 for no valid numbers', () => {
+      expect(funcs.PRODUCT('text')).toBe(0);
+    });
+
+    it('should handle arrays', () => {
+      expect(funcs.PRODUCT([2, 3], [4, 5])).toBe(120);
+    });
+  });
+
+  describe('COUNTIF', () => {
+    it('should count values meeting numeric criteria', () => {
+      expect(funcs.COUNTIF([10, 20, 30, 40], '>20')).toBe(2);
+      expect(funcs.COUNTIF([10, 20, 30, 40], '>=20')).toBe(3);
+    });
+
+    it('should count exact matches', () => {
+      expect(funcs.COUNTIF([10, 20, 10, 30], 10)).toBe(2);
+    });
+
+    it('should count text matches (case-insensitive)', () => {
+      expect(funcs.COUNTIF(['Apple', 'banana', 'APPLE'], 'apple')).toBe(2);
+    });
+
+    it('should handle < and <= operators', () => {
+      expect(funcs.COUNTIF([10, 20, 30, 40], '<30')).toBe(2);
+      expect(funcs.COUNTIF([10, 20, 30, 40], '<=30')).toBe(3);
+    });
+
+    it('should handle <> operator', () => {
+      expect(funcs.COUNTIF([10, 20, 10, 30], '<>10')).toBe(2);
+    });
+  });
+
+  describe('MEDIAN', () => {
+    it('should find median of odd count', () => {
+      expect(funcs.MEDIAN(1, 2, 3, 4, 5)).toBe(3);
+      expect(funcs.MEDIAN(5, 1, 3)).toBe(3);
+    });
+
+    it('should find median of even count', () => {
+      expect(funcs.MEDIAN(1, 2, 3, 4)).toBe(2.5);
+      expect(funcs.MEDIAN(1, 5, 3, 7)).toBe(4);
+    });
+
+    it('should handle arrays', () => {
+      expect(funcs.MEDIAN([1, 2, 3, 4, 5])).toBe(3);
+    });
+
+    it('should ignore non-numeric values', () => {
+      expect(funcs.MEDIAN(1, 'text', 3, 5)).toBe(3);
+    });
+
+    it('should throw error for no valid numbers', () => {
+      expect(() => funcs.MEDIAN('text')).toThrow(NumError);
     });
   });
 });
