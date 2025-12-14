@@ -769,6 +769,140 @@ export class EditorManager {
       return;
     }
 
+    // Check if we should toggle off (selection already has this formatting)
+    const shouldToggleOff = this._selectionHasFormatting(range, styleChanges);
+
+    if (shouldToggleOff) {
+      // Remove the formatting
+      this._removeFormatFromSelection(range, styleChanges);
+    } else {
+      // Apply the formatting
+      this._applyFormatToRange(range, styleChanges);
+    }
+
+    this._handleInput();
+  }
+
+  /**
+   * Checks if the selection already has the given formatting
+   * @private
+   */
+  _selectionHasFormatting(range, styleChanges) {
+    const container = range.commonAncestorContainer;
+
+    // Get the element (if container is text node, get parent)
+    const element = container.nodeType === Node.TEXT_NODE
+      ? container.parentElement
+      : container;
+
+    if (!element) return false;
+
+    // Check if the formatting property is already applied
+    for (const prop in styleChanges) {
+      if (prop === 'bold') {
+        const fontWeight = window.getComputedStyle(element).fontWeight;
+        if (fontWeight === 'bold' || fontWeight === '700') return true;
+      }
+      if (prop === 'italic') {
+        const fontStyle = window.getComputedStyle(element).fontStyle;
+        if (fontStyle === 'italic') return true;
+      }
+      if (prop === 'underline') {
+        const textDecoration = window.getComputedStyle(element).textDecoration;
+        if (textDecoration.includes('underline')) return true;
+      }
+      if (prop === 'strikethrough') {
+        const textDecoration = window.getComputedStyle(element).textDecoration;
+        if (textDecoration.includes('line-through')) return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Removes formatting from selection
+   * @private
+   */
+  _removeFormatFromSelection(range, styleChanges) {
+    const selection = window.getSelection();
+
+    // Extract the contents
+    const fragment = range.extractContents();
+
+    // Remove the specific styling from the fragment
+    this._removeStyleFromFragment(fragment, styleChanges);
+
+    // Re-insert the fragment
+    range.insertNode(fragment);
+
+    // Normalize to clean up
+    this.cellEditor.normalize();
+
+    // Restore selection to the modified content
+    try {
+      const newRange = document.createRange();
+      newRange.selectNodeContents(fragment.firstChild || this.cellEditor);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    } catch (e) {
+      // Fallback: just collapse selection
+      selection.removeAllRanges();
+    }
+  }
+
+  /**
+   * Removes specific styles from a document fragment
+   * @private
+   */
+  _removeStyleFromFragment(fragment, styleChanges) {
+    const walker = document.createTreeWalker(
+      fragment,
+      NodeFilter.SHOW_ELEMENT,
+      null
+    );
+
+    const spans = [];
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.tagName === 'SPAN') {
+        spans.push(node);
+      }
+    }
+
+    spans.forEach(span => {
+      for (const prop in styleChanges) {
+        if (prop === 'bold') {
+          span.style.fontWeight = '';
+        }
+        if (prop === 'italic') {
+          span.style.fontStyle = '';
+        }
+        if (prop === 'underline' || prop === 'strikethrough') {
+          span.style.textDecoration = '';
+        }
+        if (prop === 'color') {
+          span.style.color = '';
+        }
+      }
+
+      // If span has no more styles, unwrap it
+      if (!span.style.cssText || span.style.cssText.trim() === '') {
+        while (span.firstChild) {
+          span.parentNode.insertBefore(span.firstChild, span);
+        }
+        span.remove();
+      }
+    });
+  }
+
+  /**
+   * Applies formatting to a range
+   * @private
+   */
+  _applyFormatToRange(range, styleChanges) {
+    const selection = window.getSelection();
+
     // Wrap selected content in styled span
     const span = document.createElement('span');
     this._applyStyleToElement(span, styleChanges);
@@ -788,8 +922,6 @@ export class EditorManager {
     } catch (e) {
       Logger.warn('EditorManager', 'Failed to apply format to selection', e);
     }
-
-    this._handleInput();
   }
 
   /**

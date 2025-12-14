@@ -57,11 +57,14 @@ export class UpdateCellsCommand extends Command {
       const style = update[styleKey];
       const richText = update[richTextKey];
 
+      let needsContentRerender = false;
+
       // 1. Update Value (Source of Truth & Worker)
       // Only update if value is provided (undefined means no change)
       if (value !== undefined) {
         this.fileManager.updateCellData(cellId, value);
         this._updateWorker(cellId, value);
+        needsContentRerender = true;
       }
 
       // 2. Update Style (Source of Truth & Visuals)
@@ -77,20 +80,23 @@ export class UpdateCellsCommand extends Command {
       // Only update if richText is provided (even null is a valid value to clear)
       if (richText !== undefined) {
         this.fileManager.updateCellRichText(cellId, richText);
+        needsContentRerender = true;
+      }
 
-        // Re-render cell content with rich text
-        if (this.renderer) {
-          const cellStyle = this.fileManager.getCellStyle(cellId);
-          const displayValue = value !== undefined ? value : this.fileManager.getRawCellValue(cellId);
+      // Re-render cell content if value or richText changed
+      // This ensures rich text is preserved when value updates
+      if (needsContentRerender && this.renderer) {
+        const cellStyle = this.fileManager.getCellStyle(cellId);
+        const displayValue = value !== undefined ? value : this.fileManager.getRawCellValue(cellId);
+        const currentRichText = richText !== undefined ? richText : this.fileManager.getCellRichText(cellId);
 
-          this.renderer.updateCellContent(
-            cellId,
-            displayValue,
-            richText,
-            cellStyle,
-            this.fileManager.styleManager
-          );
-        }
+        this.renderer.updateCellContent(
+          cellId,
+          displayValue,
+          currentRichText,
+          cellStyle,
+          this.fileManager.styleManager
+        );
       }
     });
   }

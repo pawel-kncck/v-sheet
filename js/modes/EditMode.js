@@ -74,7 +74,16 @@ export class EditMode extends AbstractMode {
 
     // Start editing through EditorManager
     if (this._editorManager && cellId) {
-      this._editorManager.startEdit(cellId, initialValue, null);
+      // Get rich text and style for WYSIWYG editing
+      const richText = this._context.fileManager?.getCellRichText(cellId);
+      const cellStyle = this._context.fileManager?.getCellStyle(cellId);
+      const styleManager = this._context.fileManager?.styleManager;
+
+      this._editorManager.startEdit(cellId, initialValue, null, false, {
+        richText,
+        cellStyle,
+        styleManager
+      });
 
       // If cursor position was provided (e.g., transitioning from EnterMode), restore it
       if (typeof cursorPosition === 'number') {
@@ -218,6 +227,7 @@ export class EditMode extends AbstractMode {
    * Handles INPUT intent.
    *
    * If user types a formula trigger ('='), switch to FormulaMode.
+   * If active style is set, manually insert text with styling.
    * Otherwise, let browser handle the input.
    *
    * @private
@@ -237,6 +247,19 @@ export class EditMode extends AbstractMode {
         triggerKey: char
       });
       return true;
+    }
+
+    // Check if active style is set
+    const activeStyle = this._editorManager?.getActiveStyle();
+    const hasActiveStyle = activeStyle && (
+      activeStyle.bold || activeStyle.italic || activeStyle.underline ||
+      activeStyle.strikethrough || activeStyle.color || activeStyle.size || activeStyle.family
+    );
+
+    if (hasActiveStyle && this._editorManager) {
+      // Manually insert text with active style
+      this._editorManager._insertTextAtCursor(char);
+      return true; // Prevent browser from inserting
     }
 
     // Let browser handle normal input

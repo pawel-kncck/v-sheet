@@ -185,6 +185,10 @@ export class Spreadsheet {
     }
   }
 
+  setToolbar(toolbar) {
+    this.toolbar = toolbar;
+  }
+
   // ... [loadFromFile method same as before] ...
   loadFromFile(fileData) {
     if (!fileData) return;
@@ -419,7 +423,17 @@ export class Spreadsheet {
       const { type, payload } = event.data;
       if (type === 'updates') {
         Object.entries(payload.updates).forEach(([cellId, value]) => {
-          this.renderer.updateCellContent(cellId, value);
+          // Get rich text and style for proper rendering
+          const richText = this.fileManager.getCellRichText(cellId);
+          const cellStyle = this.fileManager.getCellStyle(cellId);
+
+          this.renderer.updateCellContent(
+            cellId,
+            value,
+            richText,
+            cellStyle,
+            this.fileManager.styleManager
+          );
         });
       } else if (type === 'error') {
         Logger.error('Worker', payload.message);

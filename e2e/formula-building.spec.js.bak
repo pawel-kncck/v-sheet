@@ -47,7 +47,7 @@ test.describe('Formula Building Scenarios', () => {
     await page.locator('[data-id="C1"]').click();
     await page.keyboard.press('F2');
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=A1+B1');
+    await expect(editor).toHaveValue('=A1+B1');
   });
 
   test('Scenario 1.2: Formula with multiplication', async ({ page }) => {
@@ -150,13 +150,13 @@ test.describe('Formula Building Scenarios', () => {
     await page.locator('[data-id="A1"]').click();
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=A1');
+    await expect(editor).toHaveValue('=A1');
 
     await page.keyboard.type('+');
-    await expect(editor).toHaveText('=A1+');
+    await expect(editor).toHaveValue('=A1+');
 
     await page.locator('[data-id="B1"]').click();
-    await expect(editor).toHaveText('=A1+B1');
+    await expect(editor).toHaveValue('=A1+B1');
 
     await page.keyboard.press('Enter');
     await expect(page.locator('[data-id="C1"]')).toHaveText('15');
@@ -174,14 +174,14 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.press('ArrowLeft');
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=B1');
+    await expect(editor).toHaveValue('=B1');
 
     await page.keyboard.type('+');
     // After typing operator, navigation resets to editing cell (C1)
     // So ArrowLeft from C1 points to B1, not A1
     await page.keyboard.press('ArrowLeft');
 
-    await expect(editor).toHaveText('=B1+B1');
+    await expect(editor).toHaveValue('=B1+B1');
 
     await page.keyboard.press('Enter');
     await expect(page.locator('[data-id="C1"]')).toHaveText('40');
@@ -227,7 +227,7 @@ test.describe('Formula Building Scenarios', () => {
     await page.locator('[data-id="A5"]').click({ modifiers: ['Shift'] });
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=SUM(A1:A5');
+    await expect(editor).toHaveValue('=SUM(A1:A5');
 
     await page.keyboard.type(')');
     await page.keyboard.press('Enter');
@@ -368,13 +368,13 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.type('B');
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=A1+B');
+    await expect(editor).toHaveValue('=A1+B');
 
     // Arrow should move cursor, not update reference
     await page.keyboard.press('ArrowLeft');
     await page.keyboard.type('X');
 
-    const editorValue = await editor.textContent();
+    const editorValue = await editor.inputValue();
     expect(editorValue).toContain('X');
   });
 
@@ -392,7 +392,7 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.press('End');
     await page.keyboard.type(')');
 
-    await expect(editor).toHaveText('=SUM(A1)');
+    await expect(editor).toHaveValue('=SUM(A1)');
   });
 
   // ===== Escape Cancels Formula =====
@@ -402,7 +402,7 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.type('=A1+B1');
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=A1+B1');
+    await expect(editor).toHaveValue('=A1+B1');
 
     await page.keyboard.press('Escape');
 
@@ -464,7 +464,7 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.press('F4');
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=$A$1');
+    await expect(editor).toHaveValue('=$A$1');
   });
 
   test('Scenario 10.2: F4 completes full cycle $A$1 → A$1 → $A1 → A1', async ({ page }) => {
@@ -474,13 +474,13 @@ test.describe('Formula Building Scenarios', () => {
     const editor = page.locator('#cell-editor');
 
     await page.keyboard.press('F4');
-    await expect(editor).toHaveText('=A$1');
+    await expect(editor).toHaveValue('=A$1');
 
     await page.keyboard.press('F4');
-    await expect(editor).toHaveText('=$A1');
+    await expect(editor).toHaveValue('=$A1');
 
     await page.keyboard.press('F4');
-    await expect(editor).toHaveText('=A1');
+    await expect(editor).toHaveValue('=A1');
   });
 
   test.skip('Scenario 10.3: F4 in EditMode cycles reference at cursor', async ({ page }) => {
@@ -497,7 +497,7 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.press('F4');
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=$A$1+B2');
+    await expect(editor).toHaveValue('=$A$1+B2');
   });
 
   test.skip('Scenario 10.4: F4 cycles range references', async ({ page }) => {
@@ -507,7 +507,7 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.press('F4');
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=SUM($A$1:$B$2)');
+    await expect(editor).toHaveValue('=SUM($A$1:$B$2)');
   });
 
   // ===== PointMode Formula Bar and Navigation =====
@@ -538,7 +538,7 @@ test.describe('Formula Building Scenarios', () => {
 
     // Formula bar should show "=A1" (the formula being built in C1)
     // NOT "100" (the value in A1 that we're pointing to)
-    await expect(editor).toHaveText('=A1');
+    await expect(editor).toHaveValue('=A1');
 
     // Add operator - navigation resets to C1 (editing cell)
     await page.keyboard.type('+');
@@ -549,7 +549,7 @@ test.describe('Formula Building Scenarios', () => {
     // Formula bar should still show the formula being built
     // Should be "=A1+D1" (D1 is right of C1)
     // NOT "200" (the value we had in B1) or any cell value
-    await expect(editor).toHaveText('=A1+D1');
+    await expect(editor).toHaveValue('=A1+D1');
   });
 
   test('PointMode: Navigation starts from editing cell after typing operator', async ({ page }) => {
@@ -580,18 +580,18 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.press('ArrowLeft');
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=A1');
+    await expect(editor).toHaveValue('=A1');
 
     // Type operator "+"
     await page.keyboard.type('+');
-    await expect(editor).toHaveText('=A1+');
+    await expect(editor).toHaveValue('=A1+');
 
     // Press ArrowDown - should navigate from D1 (editing cell), not from A1 (pointed cell)
     // From D1, ArrowDown should point to D2, not A2
     await page.keyboard.press('ArrowDown');
 
     // Formula should now be "=A1+D2", NOT "=A1+A2"
-    await expect(editor).toHaveText('=A1+D2');
+    await expect(editor).toHaveValue('=A1+D2');
 
     // Verify by completing and checking the result
     await page.keyboard.press('Enter');
@@ -622,21 +622,21 @@ test.describe('Formula Building Scenarios', () => {
     await page.keyboard.press('ArrowLeft');
 
     const editor = page.locator('#cell-editor');
-    await expect(editor).toHaveText('=A1');
+    await expect(editor).toHaveValue('=A1');
 
     // Add operator - navigation should reset to C1
     await page.keyboard.type('+');
 
     // Press ArrowLeft once - should go to B1 (left of C1), not B1 (right of A1)
     await page.keyboard.press('ArrowLeft');
-    await expect(editor).toHaveText('=A1+B1');
+    await expect(editor).toHaveValue('=A1+B1');
 
     // Add another operator
     await page.keyboard.type('*');
 
     // Press ArrowDown - should point to C2 (below C1), not B2
     await page.keyboard.press('ArrowDown');
-    await expect(editor).toHaveText('=A1+B1*C2');
+    await expect(editor).toHaveValue('=A1+B1*C2');
 
     // Verify calculation: 5 + (10 * 15) = 5 + 150 = 155
     await page.keyboard.press('Enter');

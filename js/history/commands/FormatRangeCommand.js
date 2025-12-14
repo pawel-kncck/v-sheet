@@ -34,10 +34,23 @@ export class FormatRangeCommand extends Command {
     this.backupData.forEach(({ cellId, newStyleId }) => {
       // Update Data
       this._updateCellData(cellId, newStyleId);
-      
+
       // Update Visuals
       const styleObject = this.fileManager.styleManager.getStyle(newStyleId);
       this.renderer.updateCellStyle(cellId, styleObject);
+
+      // If cell has rich text, re-render content so spans inherit new cell-level styles
+      const richText = this.fileManager.getCellRichText(cellId);
+      if (richText && richText.length > 0) {
+        const value = this.fileManager.getRawCellValue(cellId);
+        this.renderer.updateCellContent(
+          cellId,
+          value,
+          richText,
+          styleObject,
+          this.fileManager.styleManager
+        );
+      }
     });
   }
 
@@ -51,6 +64,19 @@ export class FormatRangeCommand extends Command {
       // Note: getStyle returns null if ID is null/undefined, which clears the style
       const styleObject = this.fileManager.styleManager.getStyle(oldStyleId);
       this.renderer.updateCellStyle(cellId, styleObject);
+
+      // If cell has rich text, re-render content so spans inherit restored cell-level styles
+      const richText = this.fileManager.getCellRichText(cellId);
+      if (richText && richText.length > 0) {
+        const value = this.fileManager.getRawCellValue(cellId);
+        this.renderer.updateCellContent(
+          cellId,
+          value,
+          richText,
+          styleObject,
+          this.fileManager.styleManager
+        );
+      }
     });
   }
 

@@ -104,13 +104,11 @@ export class FormulaMode extends NavigationMode {
 
       // For full formulas (e.g., F2 on existing formula), position cursor at end
       if (!isSingleChar) {
-        const editor = document.getElementById('cell-editor');
-        if (editor) {
-          setTimeout(() => {
-            const len = editor.value.length;
-            editor.setSelectionRange(len, len);
-          }, 0);
-        }
+        setTimeout(() => {
+          // Use EditorManager's setCursorPosition for contenteditable compatibility
+          const len = triggerKey.length;
+          this._editorManager.setCursorPosition(len);
+        }, 0);
       }
     }
 
@@ -246,12 +244,15 @@ export class FormulaMode extends NavigationMode {
    * Handles INPUT intent.
    *
    * In pointing state:
-   * - Operators: append and stay in pointing (reset selection to formula cell)
-   * - Letters/numbers: append and switch to editing state
+   * - Operators: stay in pointing, let browser insert, then reset selection
+   * - Letters/numbers: switch to editing state, let browser insert
    *
    * In editing state:
-   * - Operators: append and switch to pointing state
+   * - Operators: switch to pointing state, let browser insert
    * - Letters/numbers: let browser handle
+   *
+   * Note: For contenteditable, we let the browser handle text insertion.
+   * We only update state and formula references, not the text itself.
    *
    * @private
    * @param {{ char: string }} context
@@ -262,11 +263,17 @@ export class FormulaMode extends NavigationMode {
     const isOperator = POINTING_TRIGGERS.includes(char);
 
     if (isOperator) {
-      // Operator typed - append, ensure pointing state, reset selection
+      // Operator typed - manually insert it and reset selection
+      // We must handle this synchronously to ensure selection is reset before next keypress
+
+      // Get current value and update with operator
       const currentValue = this._editorManager.getValue();
       const newValue = currentValue + char;
       this._editorManager.setValue(newValue);
       this._baseFormula = newValue;
+
+      // Position cursor at end
+      this._editorManager.setCursorPosition(newValue.length);
 
       // Switch to pointing state if not already
       if (!this._isPointing) {
@@ -274,20 +281,20 @@ export class FormulaMode extends NavigationMode {
         this._updateModeDisplay();
       }
 
+      // Reset selection to formula cell (must be synchronous)
       this._resetSelectionToFormulaCell();
+
       Logger.log(this.getName(), `Operator "${char}" → pointing state`);
-      return true;
+      return true; // Prevent browser from inserting (we already did it)
     }
 
     if (this._isPointing) {
-      // Non-operator in pointing state - append and switch to editing
-      const currentValue = this._editorManager.getValue();
-      this._editorManager.setValue(currentValue + char);
+      // Non-operator in pointing state - switch to editing, let browser insert
       this._isPointing = false;
       this._updateModeDisplay();
 
       Logger.log(this.getName(), `Character "${char}" → editing state`);
-      return true;
+      return false; // Let browser handle insertion
     }
 
     // Non-operator in editing state - let browser handle

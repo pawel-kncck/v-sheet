@@ -133,9 +133,8 @@ export class EnterMode extends NavigationMode {
         return this._handleSwitchToEdit();
 
       case INTENTS.INPUT:
-        // Additional input is handled by the editor's native input
-        // Return false to allow browser to handle character input
-        return false;
+        // Handle input to apply active style if set
+        return this._handleInput(context);
 
       // Text-level formatting support - toggle active style (no text selection in Enter mode)
       case INTENTS.FORMAT_BOLD:
@@ -175,6 +174,33 @@ export class EnterMode extends NavigationMode {
       const cellStyle = this._context.fileManager?.getCellStyle(this._enteringCellId);
       this._context.updateToolbarState(cellStyle || {}, false);
     }
+  }
+
+  /**
+   * Handles INPUT intent - manually inserts text with active style if set.
+   *
+   * @private
+   * @param {{ char: string }} context
+   * @returns {boolean}
+   */
+  _handleInput(context) {
+    const { char } = context;
+
+    // Check if active style is set
+    const activeStyle = this._editorManager?.getActiveStyle();
+    const hasActiveStyle = activeStyle && (
+      activeStyle.bold || activeStyle.italic || activeStyle.underline ||
+      activeStyle.strikethrough || activeStyle.color || activeStyle.size || activeStyle.family
+    );
+
+    if (hasActiveStyle && this._editorManager) {
+      // Manually insert text with active style
+      this._editorManager._insertTextAtCursor(char);
+      return true; // Prevent browser from inserting
+    }
+
+    // No active style, let browser handle insertion
+    return false;
   }
 
   /**
