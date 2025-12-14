@@ -571,33 +571,33 @@ Backend API unchanged:
 
 ## Implementation Phases
 
-### Phase 1: Data Model & Rendering
-- [ ] Extend cell data structure with `richText` property
-- [ ] Update StyleManager for text-level style storage
-- [ ] Implement `resolveStyle()` merge function
-- [ ] Update GridRenderer to render spans for rich text cells
+### Phase 1: Data Model & Rendering ✓
+- [x] Extend cell data structure with `richText` property
+- [x] Update StyleManager for text-level style storage
+- [x] Implement `resolveStyle()` merge function
+- [x] Update GridRenderer to render spans for rich text cells
 
-### Phase 2: Editor Refactor
-- [ ] Replace `<input>` with `contenteditable` div
-- [ ] Implement selection tracking
-- [ ] Implement active style management
-- [ ] Sync editor content with cell richText on edit start/end
+### Phase 2: Editor Refactor ✓
+- [x] Replace `<input>` with `contenteditable` div
+- [x] Implement selection tracking
+- [x] Implement active style management
+- [x] Sync editor content with cell richText on edit start/end
 
-### Phase 3: Mode Integration
-- [ ] Update EditMode for text-level formatting with selection
-- [ ] Update EnterMode for active style formatting
-- [ ] Update ReadyMode for cell-level formatting (clear richText)
-- [ ] Update PointMode (if applicable)
+### Phase 3: Mode Integration ✓
+- [x] Update EditMode for text-level formatting with selection
+- [x] Update EnterMode for active style formatting
+- [x] Update ReadyMode for cell-level formatting (clear richText)
+- [x] Update FormulaMode to disable formatting
 
-### Phase 4: Commands & History
-- [ ] Create FormatTextCommand for undo/redo
-- [ ] Update UpdateCellsCommand for richText preservation
-- [ ] Test undo/redo across all scenarios
+### Phase 4: Commands & History ✓
+- [x] Create FormatTextCommand for undo/redo
+- [x] Update UpdateCellsCommand for richText preservation
+- [x] Test undo/redo across all scenarios
 
-### Phase 5: Clipboard & Polish
-- [ ] Implement rich text copy/paste
-- [ ] Update toolbar state indicators
-- [ ] Handle edge cases (delete, merge runs, etc.)
+### Phase 5: Clipboard & Polish ✓
+- [x] Implement rich text copy/paste
+- [x] Update toolbar state indicators
+- [x] Handle edge cases (delete, merge runs, etc.)
 
 ---
 

@@ -263,6 +263,47 @@ Always handle worker responses asynchronously.
 - `js/history/commands/FormatRangeCommand.js` - Undo-able formatting
 - `js/ui/GridRenderer.js` - `updateCellStyle()` applies CSS
 
+### Text-Level Formatting (Rich Text)
+
+v-sheet supports character-level formatting within cells, allowing different styles for different portions of text.
+
+**Data model:**
+```javascript
+{
+  "A1": {
+    value: "Hello World",        // Plain text value
+    styleId: "abc123",           // Cell-level style (inheritance source)
+    richText: [                  // Optional: text-level formatting runs
+      { start: 0, end: 5, styleId: "def456" },   // "Hello" - styled
+      { start: 6, end: 11, styleId: null }       // "World" - inherits cell style
+    ]
+  }
+}
+```
+
+**Mode-specific behavior:**
+- **Ready mode:** Formatting applies to entire cell (cell-level), clears any rich text
+- **Edit mode (with selection):** Formatting applies to selected text only (text-level)
+- **Edit/Enter mode (cursor only):** Toggles active style for new text
+- **Formula mode:** Formatting is disabled (formulas can't have text-level styles)
+
+**Style inheritance:**
+Text-level styles only store *overrides* from cell-level style. The effective style is computed by merging:
+```javascript
+StyleManager.resolveStyle(cellStyle, textRunStyle)
+```
+
+**WYSIWYG editing:**
+- In-cell editor uses `contenteditable` div for live formatting preview
+- Formula bar shows plain text only (no rich text rendering)
+- Cell display renders rich text with spans
+
+**Key files:**
+- `js/ui/EditorManager.js` - WYSIWYG contenteditable editor with active style
+- `js/history/commands/FormatTextCommand.js` - Undo-able text formatting
+- `js/StyleManager.js` - `resolveStyle()` for style inheritance
+- `docs/specs/text-level-formatting.md` - Full feature specification
+
 ## File API Endpoints
 
 | Method | Endpoint | Description |
