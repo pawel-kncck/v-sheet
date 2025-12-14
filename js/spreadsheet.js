@@ -89,6 +89,7 @@ export class Spreadsheet {
       selectionManager: this.selectionManager,
       editorManager: this.editor,
       historyManager: this.historyManager,
+      formulaHighlighter: this.formulaHighlighter,
       fileManager: null, // Will be set later via setFileManager
       formulaWorker: this.formulaWorker,
       renderer: this.renderer,

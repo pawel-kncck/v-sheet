@@ -430,6 +430,7 @@ _handleInput(context) {
 
     // Position cursor at the end of the formula
     this._editorManager.setCursorPosition(newFormula.length);
+    this._context.formulaHighlighter._updateOverlays();
 
     Logger.log(this.getName(), `Updated formula with reference: ${reference}`);
   }
