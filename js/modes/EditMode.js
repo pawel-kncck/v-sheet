@@ -249,15 +249,19 @@ export class EditMode extends AbstractMode {
       return true;
     }
 
-    // Check if active style is set
+    // Check if active style is set (either explicitly ON or OFF)
     const activeStyle = this._editorManager?.getActiveStyle();
-    const hasActiveStyle = activeStyle && (
+    const hasActiveStyleOn = activeStyle && (
       activeStyle.bold || activeStyle.italic || activeStyle.underline ||
       activeStyle.strikethrough || activeStyle.color || activeStyle.size || activeStyle.family
     );
 
-    if (hasActiveStyle && this._editorManager) {
-      // Manually insert text with active style
+    // Also check if there's existing rich text - we need manual insertion to prevent
+    // unwanted style inheritance when typing inside styled spans
+    const hasRichText = this._editorManager?.hasRichTextFormatting();
+
+    if ((hasActiveStyleOn || hasRichText) && this._editorManager) {
+      // Manually insert text with active style to ensure proper formatting
       this._editorManager._insertTextAtCursor(char);
       return true; // Prevent browser from inserting
     }

@@ -123,7 +123,7 @@ test.describe('Comprehensive Text-Level Formatting Journey', () => {
 
     // Step 1-2: Click A1 and type text (Enter mode)
     await cellA1.click();
-    await expect(cellA1).toHaveAttribute('data-selected', 'true');
+    await expect(cellA1).toHaveClass(/selected/);
 
     await page.keyboard.type('One Two Three');
     await expect(editor).toBeVisible(); // Should be in Enter mode
@@ -131,7 +131,7 @@ test.describe('Comprehensive Text-Level Formatting Journey', () => {
     // Step 3: Press Enter to commit, should move to A2
     await page.keyboard.press('Enter');
     const cellA2 = getCell(page, 'A2');
-    await expect(cellA2).toHaveAttribute('data-selected', 'true');
+    await expect(cellA2).toHaveClass(/selected/);
 
     // Verify A1 contains the text
     await expect(cellA1).toContainText('One Two Three');
@@ -349,7 +349,8 @@ test.describe('Comprehensive Text-Level Formatting Journey', () => {
       await cellA1.dblclick();
       await page.keyboard.press('Home');
       for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
-      await page.keyboard.press(`${modifier}+Shift+End`);
+      // Select "Two Three" (9 characters) using Shift+ArrowRight
+      for (let i = 0; i < 9; i++) await page.keyboard.press('Shift+ArrowRight');
       await page.keyboard.press(`${modifier}+b`);
       await page.keyboard.press('Enter');
 

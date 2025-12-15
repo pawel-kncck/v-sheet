@@ -296,7 +296,8 @@ export class EditorManager {
   }
 
   /**
-   * Checks if active style has any non-default properties
+   * Checks if active style has any non-default properties (truthy values only).
+   * Use _hasActiveStyleOverrides() to check for explicit overrides including false values.
    * @private
    */
   _hasActiveStyleProperties() {
@@ -308,6 +309,19 @@ export class EditorManager {
            this._activeStyle.color ||
            this._activeStyle.size ||
            this._activeStyle.family;
+  }
+
+  /**
+   * Checks if active style has any explicit overrides (including false values).
+   * This is used to determine if we need a span to override cell-level formatting.
+   * @private
+   */
+  _hasActiveStyleOverrides() {
+    if (!this._activeStyle) return false;
+    // Check if any property has been explicitly set (even to false)
+    return Object.keys(this._activeStyle).some(key =>
+      this._activeStyle[key] !== undefined
+    );
   }
 
   /**
@@ -332,20 +346,37 @@ export class EditorManager {
   }
 
   /**
-   * Applies style properties to an element
+   * Applies style properties to an element.
+   * If applyExplicitOverrides is true, also applies explicit "normal" values for false properties.
    * @private
+   * @param {HTMLElement} element - Element to style
+   * @param {Object} style - Style properties
+   * @param {boolean} applyExplicitOverrides - If true, apply "normal" for explicitly false values
    */
-  _applyStyleToElement(element, style) {
+  _applyStyleToElement(element, style, applyExplicitOverrides = false) {
     if (!style) return;
 
-    if (style.bold) element.style.fontWeight = 'bold';
-    if (style.italic) element.style.fontStyle = 'italic';
+    // Bold: apply both true and explicit false
+    if (style.bold) {
+      element.style.fontWeight = 'bold';
+    } else if (applyExplicitOverrides && style.bold === false) {
+      element.style.fontWeight = 'normal';
+    }
+
+    // Italic: apply both true and explicit false
+    if (style.italic) {
+      element.style.fontStyle = 'italic';
+    } else if (applyExplicitOverrides && style.italic === false) {
+      element.style.fontStyle = 'normal';
+    }
 
     const decorations = [];
     if (style.underline) decorations.push('underline');
     if (style.strikethrough) decorations.push('line-through');
     if (decorations.length > 0) {
       element.style.textDecoration = decorations.join(' ');
+    } else if (applyExplicitOverrides && (style.underline === false || style.strikethrough === false)) {
+      element.style.textDecoration = 'none';
     }
 
     if (style.color) element.style.color = style.color;
@@ -367,9 +398,16 @@ export class EditorManager {
     // Create styled text node or span
     let node;
     if (this._activeStyle && this._hasActiveStyleProperties()) {
+      // Active style has positive formatting (bold, italic, etc.)
       node = document.createElement('span');
       node.textContent = text;
       this._applyStyleToElement(node, this._activeStyle);
+    } else if (this._activeStyle && this._hasActiveStyleOverrides() && this._cellStyle) {
+      // Active style has explicit overrides (e.g., bold=false) and cell has formatting
+      // Create span with explicit "normal" values to prevent inheritance
+      node = document.createElement('span');
+      node.textContent = text;
+      this._applyStyleToElement(node, this._activeStyle, true); // Pass true for explicit overrides
     } else {
       node = document.createTextNode(text);
     }
@@ -387,39 +425,59 @@ export class EditorManager {
   }
 
   /**
-   * Syncs rich text runs from the current DOM structure
+   * Syncs rich text runs from the current DOM structure.
+   * Recursively walks nested spans to properly extract all formatting.
    * @private
    */
   _syncRichTextFromDOM() {
     const runs = [];
-    let offset = 0;
 
-    // Walk through child nodes and extract runs
-    for (const node of this.cellEditor.childNodes) {
+    /**
+     * Recursively extracts runs from a node and its children.
+     * @param {Node} node - The node to process
+     * @param {Object|null} inheritedStyle - Style inherited from parent spans
+     * @param {Object} state - Mutable state object with current offset
+     */
+    const extractRuns = (node, inheritedStyle, state) => {
       if (node.nodeType === Node.TEXT_NODE) {
         const text = node.textContent;
         if (text.length > 0) {
           runs.push({
-            start: offset,
-            end: offset + text.length,
-            styleId: null // Plain text, no style override
+            start: state.offset,
+            end: state.offset + text.length,
+            style: inheritedStyle // Use inherited style from parent spans
           });
-          offset += text.length;
+          state.offset += text.length;
         }
       } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SPAN') {
-        const text = node.textContent;
-        if (text.length > 0) {
-          // Extract style from span
-          const style = this._extractStyleFromElement(node);
+        // Get this span's own style
+        const ownStyle = this._extractStyleFromElement(node);
 
-          runs.push({
-            start: offset,
-            end: offset + text.length,
-            style: style // Store inline for now, will be converted to styleId on commit
-          });
-          offset += text.length;
+        // Merge inherited style with own style
+        let effectiveStyle;
+        if (inheritedStyle && ownStyle) {
+          // Merge: own style overrides inherited
+          effectiveStyle = {
+            font: {
+              ...(inheritedStyle.font || inheritedStyle || {}),
+              ...(ownStyle.font || ownStyle || {})
+            }
+          };
+        } else {
+          effectiveStyle = ownStyle || inheritedStyle;
+        }
+
+        // Recursively process children with merged style
+        for (const child of node.childNodes) {
+          extractRuns(child, effectiveStyle, state);
         }
       }
+    };
+
+    // Start extraction from editor's direct children
+    const state = { offset: 0 };
+    for (const node of this.cellEditor.childNodes) {
+      extractRuns(node, null, state);
     }
 
     // Normalize: merge adjacent runs with identical styles
@@ -480,17 +538,36 @@ export class EditorManager {
   }
 
   /**
-   * Extracts style properties from a DOM element
+   * Extracts style properties from a DOM element.
+   * Includes explicit "normal" values as false (for overriding cell-level styles).
    * @private
    */
   _extractStyleFromElement(element) {
     const style = {};
     const computed = element.style;
 
-    if (computed.fontWeight === 'bold') style.bold = true;
-    if (computed.fontStyle === 'italic') style.italic = true;
+    // Bold: check for both true and explicit false
+    if (computed.fontWeight === 'bold') {
+      style.bold = true;
+    } else if (computed.fontWeight === 'normal') {
+      style.bold = false;
+    }
+
+    // Italic: check for both true and explicit false
+    if (computed.fontStyle === 'italic') {
+      style.italic = true;
+    } else if (computed.fontStyle === 'normal') {
+      style.italic = false;
+    }
+
+    // Text decoration
     if (computed.textDecoration?.includes('underline')) style.underline = true;
     if (computed.textDecoration?.includes('line-through')) style.strikethrough = true;
+    if (computed.textDecoration === 'none') {
+      style.underline = false;
+      style.strikethrough = false;
+    }
+
     if (computed.color) style.color = computed.color;
     if (computed.fontSize) style.size = parseInt(computed.fontSize, 10);
     if (computed.fontFamily) style.family = computed.fontFamily;
@@ -939,31 +1016,267 @@ export class EditorManager {
   }
 
   /**
-   * Applies formatting to a range
+   * Applies formatting to a range by splitting existing spans to avoid nesting.
    * @private
    */
   _applyFormatToRange(range, styleChanges) {
-    const selection = window.getSelection();
-
-    // Wrap selected content in styled span
-    const span = document.createElement('span');
-    this._applyStyleToElement(span, styleChanges);
-
     try {
-      span.appendChild(range.extractContents());
-      range.insertNode(span);
+      // Check if selection is inside an existing span
+      const parentSpan = this._getParentSpan(range.commonAncestorContainer);
+
+      if (parentSpan && parentSpan !== this.cellEditor) {
+        // Selection is inside an existing span - split it
+        this._splitSpanAndApplyFormat(range, parentSpan, styleChanges);
+      } else {
+        // Selection is at top level or spans multiple elements
+        this._wrapRangeWithStyle(range, styleChanges);
+      }
 
       // Normalize to merge adjacent text nodes
       this.cellEditor.normalize();
-
-      // Restore selection
-      const newRange = document.createRange();
-      newRange.selectNodeContents(span);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
     } catch (e) {
       Logger.warn('EditorManager', 'Failed to apply format to selection', e);
     }
+  }
+
+  /**
+   * Gets the parent span element of a node, if any.
+   * @private
+   * @param {Node} node - The node to check
+   * @returns {HTMLElement|null} The parent span or null
+   */
+  _getParentSpan(node) {
+    while (node && node !== this.cellEditor) {
+      if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SPAN') {
+        return node;
+      }
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  /**
+   * Splits an existing span and applies formatting to the selected portion.
+   * Creates up to 3 new spans: before, selected (with new style), after.
+   * @private
+   * @param {Range} range - The selection range
+   * @param {HTMLElement} parentSpan - The span containing the selection
+   * @param {Object} styleChanges - The style changes to apply
+   */
+  _splitSpanAndApplyFormat(range, parentSpan, styleChanges) {
+    const selection = window.getSelection();
+    const fullText = parentSpan.textContent;
+
+    // Calculate offsets relative to the parent span
+    const preRange = document.createRange();
+    preRange.selectNodeContents(parentSpan);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const startOffset = preRange.toString().length;
+    const endOffset = startOffset + range.toString().length;
+
+    // Get original style from parent span
+    const originalStyle = this._extractStyleFromElement(parentSpan);
+
+    // Create new spans as direct children of the editor
+    const fragments = [];
+
+    // Before selection (keep original style)
+    if (startOffset > 0) {
+      const beforeSpan = document.createElement('span');
+      beforeSpan.textContent = fullText.substring(0, startOffset);
+      if (originalStyle) {
+        this._applyStyleToElement(beforeSpan, originalStyle.font || originalStyle);
+      }
+      fragments.push(beforeSpan);
+    }
+
+    // Selected portion (merge original style with new style)
+    const selectedSpan = document.createElement('span');
+    selectedSpan.textContent = fullText.substring(startOffset, endOffset);
+    const mergedStyle = this._mergeStyles(originalStyle, styleChanges);
+    this._applyStyleToElement(selectedSpan, mergedStyle);
+    fragments.push(selectedSpan);
+
+    // After selection (keep original style)
+    if (endOffset < fullText.length) {
+      const afterSpan = document.createElement('span');
+      afterSpan.textContent = fullText.substring(endOffset);
+      if (originalStyle) {
+        this._applyStyleToElement(afterSpan, originalStyle.font || originalStyle);
+      }
+      fragments.push(afterSpan);
+    }
+
+    // Replace parent span with new fragments
+    const parent = parentSpan.parentNode;
+    fragments.forEach(frag => parent.insertBefore(frag, parentSpan));
+    parent.removeChild(parentSpan);
+
+    // Restore selection to the styled span
+    const newRange = document.createRange();
+    newRange.selectNodeContents(selectedSpan);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+  }
+
+  /**
+   * Merges original style with new style changes.
+   * @private
+   * @param {Object|null} originalStyle - The original style (may have {font: {...}} wrapper)
+   * @param {Object} newStyleChanges - The new style properties to apply
+   * @returns {Object} Merged style object
+   */
+  _mergeStyles(originalStyle, newStyleChanges) {
+    if (!originalStyle) {
+      return newStyleChanges;
+    }
+
+    // Extract font properties from original (handle both wrapped and unwrapped)
+    const origFont = originalStyle.font || originalStyle;
+
+    return {
+      ...origFont,
+      ...newStyleChanges
+    };
+  }
+
+  /**
+   * Wraps a range with a styled span, handling overlapping spans properly.
+   * If the selection crosses span boundaries, flattens nested spans after wrapping.
+   * @private
+   * @param {Range} range - The selection range
+   * @param {Object} styleChanges - The style changes to apply
+   */
+  _wrapRangeWithStyle(range, styleChanges) {
+    const selection = window.getSelection();
+
+    // Check if selection crosses span boundaries
+    const hasSpansInSelection = this._selectionContainsSpans(range);
+
+    const span = document.createElement('span');
+    this._applyStyleToElement(span, styleChanges);
+
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+
+    // If we extracted spans, we now have nested spans - flatten them
+    if (hasSpansInSelection) {
+      this._flattenNestedSpans();
+    }
+
+    // Collapse selection after operation
+    selection.removeAllRanges();
+  }
+
+  /**
+   * Checks if a range selection contains any span elements.
+   * @private
+   * @param {Range} range - The selection range
+   * @returns {boolean} True if selection contains spans
+   */
+  _selectionContainsSpans(range) {
+    const container = range.commonAncestorContainer;
+    if (container.nodeType === Node.ELEMENT_NODE) {
+      return container.querySelector('span') !== null;
+    }
+    // For text nodes, check siblings within the range
+    const fragment = range.cloneContents();
+    return fragment.querySelector('span') !== null;
+  }
+
+  /**
+   * Flattens nested spans in the editor to ensure all spans are direct children.
+   * Merges styles from parent spans into child spans.
+   * @private
+   */
+  _flattenNestedSpans() {
+    const flatChildren = [];
+
+    // Process each direct child
+    for (const node of Array.from(this.cellEditor.childNodes)) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        // Keep text nodes as-is
+        if (node.textContent.length > 0) {
+          flatChildren.push(node.cloneNode());
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SPAN') {
+        // Check if span has nested spans
+        const nestedSpans = node.querySelectorAll('span');
+        if (nestedSpans.length > 0) {
+          // Has nested spans - flatten them
+          const flattened = this._flattenSpan(node);
+          flatChildren.push(...flattened);
+        } else {
+          // No nesting - keep as-is
+          flatChildren.push(node.cloneNode(true));
+        }
+      }
+    }
+
+    // Replace editor content with flattened children
+    this.cellEditor.innerHTML = '';
+    flatChildren.forEach(child => this.cellEditor.appendChild(child));
+  }
+
+  /**
+   * Flattens a span that may contain nested spans.
+   * Returns an array of flat spans with merged styles.
+   * @private
+   * @param {HTMLElement} span - The span to flatten
+   * @returns {Array<Node>} Array of flattened nodes
+   */
+  _flattenSpan(span) {
+    const result = [];
+    const parentStyle = this._extractStyleFromElement(span);
+
+    // Walk through all child nodes of this span
+    const processNode = (node, inheritedStyle) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent;
+        if (text.length > 0) {
+          // Create span with inherited style
+          const newSpan = document.createElement('span');
+          newSpan.textContent = text;
+          if (inheritedStyle) {
+            this._applyStyleToElement(newSpan, inheritedStyle.font || inheritedStyle);
+          }
+          result.push(newSpan);
+        }
+      } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SPAN') {
+        // Merge parent style with this span's style
+        const nodeStyle = this._extractStyleFromElement(node);
+        const mergedStyle = this._mergeStyles(inheritedStyle, nodeStyle?.font || nodeStyle);
+
+        // Check if this span has nested spans
+        const hasNestedSpans = node.querySelector('span');
+        if (hasNestedSpans) {
+          // Recurse into nested spans
+          for (const child of node.childNodes) {
+            processNode(child, mergedStyle ? { font: mergedStyle } : inheritedStyle);
+          }
+        } else {
+          // Leaf span - create flat span with merged style
+          const text = node.textContent;
+          if (text.length > 0) {
+            const newSpan = document.createElement('span');
+            newSpan.textContent = text;
+            if (mergedStyle) {
+              this._applyStyleToElement(newSpan, mergedStyle);
+            } else if (inheritedStyle) {
+              this._applyStyleToElement(newSpan, inheritedStyle.font || inheritedStyle);
+            }
+            result.push(newSpan);
+          }
+        }
+      }
+    };
+
+    // Process all children of the span
+    for (const child of span.childNodes) {
+      processNode(child, parentStyle);
+    }
+
+    return result;
   }
 
   /**
@@ -980,6 +1293,8 @@ export class EditorManager {
    * @returns {boolean}
    */
   hasRichTextFormatting() {
+    // Sync runs before checking
+    this._syncRichTextFromDOM();
     return this._richTextRuns.some(run => run.style != null || run.styleId != null);
   }
 }

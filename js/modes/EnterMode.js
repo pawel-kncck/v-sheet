@@ -71,8 +71,15 @@ export class EnterMode extends NavigationMode {
 
     // Start editing with the trigger character
     if (this._editorManager && cellId) {
+      // Get cell style to initialize active style (for inheriting cell-level formatting)
+      const cellStyle = this._context.fileManager?.getCellStyle(cellId);
+      const styleManager = this._context.fileManager?.styleManager;
+
       // Clear the cell and start with the trigger key
-      this._editorManager.startEdit(cellId, triggerKey, triggerKey);
+      this._editorManager.startEdit(cellId, triggerKey, triggerKey, false, {
+        cellStyle,
+        styleManager
+      });
       this._editorManager.focus();
     }
 

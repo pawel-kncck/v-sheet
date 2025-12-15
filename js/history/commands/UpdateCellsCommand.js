@@ -88,7 +88,9 @@ export class UpdateCellsCommand extends Command {
       if (needsContentRerender && this.renderer) {
         const cellStyle = this.fileManager.getCellStyle(cellId);
         const displayValue = value !== undefined ? value : this.fileManager.getRawCellValue(cellId);
-        const currentRichText = richText !== undefined ? richText : this.fileManager.getCellRichText(cellId);
+        // Always get richText from FileManager - it has processed styleIds
+        // (updateCellRichText converts inline styles to styleIds)
+        const currentRichText = this.fileManager.getCellRichText(cellId);
 
         this.renderer.updateCellContent(
           cellId,
